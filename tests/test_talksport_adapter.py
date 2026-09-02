@@ -1,0 +1,72 @@
+"""
+Tests against three real, saved talkSPORT competition pages (captured live
+2 Sept 2026), chosen because they cover the three cases that matter most:
+a straightforward SMS+Online+Post competition, one with a "Free phone
+entry" channel (whose label is misleading — see talksport.py's docstring),
+and a closed competition that should be skipped entirely.
+"""
+
+from __future__ import annotations
+
+from datetime import date
+from pathlib import Path
+
+from radiocomp.stations.talksport import parse_detail, parse_listing
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def test_parse_listing_finds_real_competition_links():
+    html = (FIXTURES / "talksport_listing.html").read_text()
+    results = parse_listing(html)
+
+    assert len(results) >= 15
+    titles = [title for title, _ in results]
+    assert "Chance to win £26,000 Tax-Free Cash!" in titles
+    urls = [url for _, url in results]
+    assert all(url.startswith("https://talksport.com/competitions/") for url in urls)
+    assert len(urls) == len(set(urls))  # no duplicates
+
+
+def test_tax_free_cash_prize_deadline_and_channels():
+    html = (FIXTURES / "talksport_detail_26k_tax_free.html").read_text()
+    promo, channels = parse_detail(html, "Chance to win £26,000 Tax-Free Cash!", "https://talksport.com/x")
+
+    assert promo is not None
+    assert promo.prize_value_gbp == 26000.0
+    assert promo.station_name_raw == "talkSPORT"
+    assert promo.entry_deadline == date(2026, 7, 20)
+
+    by_type = {c.channel_type.value: c for c in channels}
+    assert by_type["sms"].is_free_route is False
+    assert by_type["sms"].cost_to_entrant_gbp == 2.50
+    assert by_type["post"].is_free_route is True
+    assert by_type["post"].cost_to_entrant_gbp == 0.0
+
+
+def test_free_phone_entry_is_flagged_free_but_not_zero_confidence_risk():
+    html = (FIXTURES / "talksport_detail_26k_2026_closed.html").read_text()
+    # This fixture is a closed competition — parse_detail should skip it
+    # entirely regardless of what its channels look like.
+    promo, channels = parse_detail(html, "WIN £26,000 FOR 2026", "https://talksport.com/y")
+    assert promo is None
+    assert channels == []
+
+
+def test_nba_trip_post_route_is_free_and_sms_is_paid():
+    html = (FIXTURES / "talksport_detail_nba_trip.html").read_text()
+    promo, channels = parse_detail(
+        html, "Win the Ultimate NBA Trip to New York City for Two!", "https://talksport.com/z"
+    )
+
+    assert promo is not None
+    by_type = {c.channel_type.value: c for c in channels}
+    assert by_type["sms"].is_free_route is False
+    assert by_type["post"].is_free_route is True
+
+    # Nothing here should ever come back marked free with review_recommended
+    # also True — that combination would mean "confidently free" and "not
+    # confident" at once, which the classifier must never produce.
+    for ch in channels:
+        if ch.is_free_route is True:
+            assert ch.review_recommended is False

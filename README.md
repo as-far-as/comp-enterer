@@ -1,0 +1,133 @@
+# Radio Competition Entry Assistant
+
+Personal automation project — see the project's `technical-specification.md` and
+`scoping-research.md` for the full design and the research behind it. This repo
+is Phase 0 of the build plan: data model, storage layer, and the first working
+discovery adapter, all runnable locally today with **no GCP project required yet**.
+
+## What's here right now
+
+- `src/radiocomp/models.py` — the full data model (Station, Promotion, TandCSnapshot,
+  EntryChannel, EntryRecord, Outcome, UserProfile), as Pydantic models.
+- `src/radiocomp/storage/` — a storage layer with two interchangeable backends:
+  a local JSON store (the default, writes to `data/*.json`) and a Firestore store
+  (stubbed, ready to switch on once your GCP project exists). Nothing outside
+  `storage/` needs to change when you switch.
+- `src/radiocomp/aggregators/loquax.py` — a working, tested discovery adapter
+  against Loquax's live radio-competitions listing. Run it yourself:
+
+  ```bash
+  pip install -r requirements.txt
+  PYTHONPATH=src python -m radiocomp.aggregators.loquax
+  ```
+
+  First run pulls whatever's currently listed into `data/promotions.json`; run it
+  again and you'll see "0 new" since it dedupes against what it already knows.
+
+- `tests/` — offline tests against a saved real HTML fixture, so they don't
+  depend on Loquax's listing looking a particular way on any given day.
+
+## Update — first direct-station monitor built (talkSPORT)
+
+`src/radiocomp/stations/talksport.py` is the spec's first "direct monitoring"
+adapter, as opposed to the aggregator-ingestion pattern in `aggregators/`.
+Two things worth knowing before you extend it to other stations:
+
+- **It doesn't use Playwright.** Plain `httpx` reaches talkSPORT's pages fine —
+  the "blocked" result from the original research was specific to that
+  session's fetch-tool proxy, not a general block. Worth checking per-station
+  before reaching for headless Chromium; it's slower and heavier for no
+  reason on a site that doesn't need it.
+- **Entry-channel classification is deliberately conservative.** Real
+  talkSPORT competitions were messier than expected: a channel labelled
+  "Free phone entry" turned out to mean "billed at your standard network
+  rate" (a legitimate free route under the Gambling Act's definition, but not
+  literally £0), and "Online" entry cost is often only shown on the live
+  entry widget, not in the page text, so it can't be classified from a static
+  fetch at all. Rather than guess, every `EntryChannel` the adapter can't
+  confidently classify comes back with `is_free_route=None` and
+  `review_recommended=True` — safe by construction, since the whole point of
+  this field is to gate what the entry-execution engine is ever allowed to
+  touch automatically. Run `python -m radiocomp.stations.talksport` yourself
+  to see this live: most `web_form` channels currently come back `[REVIEW]`
+  rather than confidently `[FREE]` or `[PAID]`, and that's the correct
+  behaviour, not a bug to silence.
+- Prize-value extraction is title-only for the same reason: a body-text
+  fallback was tried and, on a live page, picked up the SMS entry cost
+  (£2.50) as the "prize value" for a trip competition with no £ figure in its
+  headline. Better to leave `prize_value_gbp` as `None` than ship a wrong
+  number into the EV model.
+
+## Known gap, deliberately left open
+
+The Ofcom licensed-radio-stations register was meant to seed the `Station`
+directory (per the spec, section 3) for the local/independent tier — I wasn't
+able to locate the right current dataset URL on Ofcom's site in this session
+(their site structure has changed since older references to it). Worth a
+follow-up look, or `data.gov.uk` may host the same register. Until then, local
+station coverage can be seeded manually with a handful of stations you care about.
+
+## Setting up the GCP project (your side)
+
+This is the one part that has to happen outside of this conversation — creating
+a Google Cloud project and attaching billing isn't something that can be done on
+your behalf. It's about 10 minutes:
+
+1. **Create the project.** [console.cloud.google.com](https://console.cloud.google.com) →
+   New Project. Pick a project ID you're happy to see in URLs and logs (e.g.
+   `radio-comp-assistant`).
+2. **Attach a billing account.** You'll need a card on file even to use the
+   Always Free tier — you won't be charged as long as usage stays within it
+   (see the technical spec, section 10, for exactly what "within it" means for
+   this project).
+3. **Set a budget alert immediately**, before building anything else: Billing →
+   Budgets & alerts → Create budget. £2–5/month is plenty as a tripwire —
+   the point isn't the amount, it's getting an email if anything ever pushes
+   past the free tier.
+4. **Enable the APIs this project needs:**
+   ```bash
+   gcloud config set project YOUR_PROJECT_ID
+   gcloud config set run/region us-central1
+   gcloud services enable \
+     run.googleapis.com \
+     cloudscheduler.googleapis.com \
+     firestore.googleapis.com \
+     storage.googleapis.com \
+     secretmanager.googleapis.com \
+     cloudbuild.googleapis.com \
+     artifactregistry.googleapis.com
+   ```
+5. **Create the Firestore database** (native mode, not Datastore mode):
+   ```bash
+   gcloud firestore databases create --location=us-central1
+   ```
+6. **Keep everything in `us-central1`** — that's where the region-locked parts
+   of the free tier (Cloud Storage, and Compute Engine if it's ever used) apply,
+   so it's simplest to standardise on it everywhere rather than mixing regions.
+
+Once that's done, switch this codebase over by setting two environment variables
+(a `.env` file in the project root, picked up automatically):
+
+```
+STORAGE_BACKEND=firestore
+GCP_PROJECT_ID=your-project-id
+```
+
+and `gcloud auth application-default login` locally so `google-cloud-firestore`
+can find credentials. No other code changes needed — the storage layer was built
+for exactly this swap.
+
+## Next steps (not built yet)
+
+1. Second aggregator adapter (theprizefinder) — same pattern as `loquax.py`.
+2. Resolve the Ofcom station-directory gap above, or seed `Station` manually
+   for a first tranche of local/independent stations.
+3. A second direct-station monitor, ideally one that actually needs
+   Playwright (a JS-heavy or bot-defended site), so the "when do we actually
+   need a real browser vs. plain httpx" judgement call gets tested against a
+   second real case rather than generalised from one.
+4. TandCSnapshot capture + a compliance-engine first pass (spec section 4) —
+   the models and EntryChannel review flags are in place for this, the
+   clause-diffing logic itself isn't built yet.
+5. Wire up Cloud Scheduler → Cloud Run Job now that the GCP project exists —
+   see the checklist above for the remaining commands to run.

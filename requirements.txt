@@ -1,0 +1,15 @@
+pydantic>=2.7
+httpx>=0.27
+beautifulsoup4>=4.12
+python-dotenv>=1.0
+
+# Uncomment once the GCP project exists and you're ready to point at real Firestore:
+# google-cloud-firestore>=2.16
+
+# Phase 1 (direct station monitoring):
+# playwright>=1.44
+
+# Phase 1 (dashboard + Telegram webhook):
+# fastapi>=0.111
+# uvicorn>=0.30
+# python-telegram-bot>=21.0
