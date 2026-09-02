@@ -6,10 +6,18 @@ too, but there was nothing to actually run it against yet.
 To activate once you have a project:
   1. pip install google-cloud-firestore (uncomment it in requirements.txt)
   2. set GCP_PROJECT_ID and STORAGE_BACKEND=firestore in your .env
-  3. `gcloud auth application-default login` (local dev) — no other
-     credential wiring needed; google-cloud-firestore picks up ADC
-     automatically, and inside a Cloud Run Job/Service it uses the
-     runtime service account instead.
+  3. credentials — two options, and this project uses the first because
+     Adán runs a dual-Google-account setup across VS Code windows/terminals
+     and the app's identity shouldn't depend on whichever personal account
+     happens to be logged into gcloud at the time:
+       a. set GOOGLE_APPLICATION_CREDENTIALS in .env to the path of a
+          dedicated service account key (see README's GCP setup section) —
+          google-cloud-firestore picks this env var up automatically before
+          falling back to ADC, no code changes needed.
+       b. or, without that set, `gcloud auth application-default login`
+          (local dev) — ties the app to whichever account ran that command.
+     Inside a Cloud Run Job/Service, the runtime service account is used
+     either way and this whole question doesn't come up.
 
 Note this needs one behavioural check before relying on it for real:
 `.model_dump(mode="json")` turns date/datetime fields into ISO strings

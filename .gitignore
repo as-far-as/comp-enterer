@@ -7,3 +7,8 @@ data/*.json
 *.egg-info/
 .DS_Store
 .pytest_cache/
+
+# Defense in depth: the service account key should live outside the repo
+# entirely (see README's GCP setup section), but never let one slip in.
+*-key.json
+service-account*.json

@@ -93,3 +93,39 @@ updated to match. The one carve-out: Cloud Storage's Always Free tier only
 applies to `us-west1`/`us-central1`/`us-east1`, so if a Storage bucket is
 ever created for this project it should go in `us-central1` specifically,
 not `europe-west2` — see README.md's GCP setup section.
+
+## 2026-09-02 — Isolating this project's GCP identity (dual-account setup)
+
+Adán runs multiple Google accounts across different VS Code windows/terminals
+(this project's personal GCP account is separate from at least one work
+account also active in gcloud locally, which currently defaults to a
+`dbol-prod` project). To stop a stray `gcloud` command or the app's own
+Firestore client from silently hitting the wrong account/project:
+
+- Added a `radio-comp` named gcloud configuration (project + region set,
+  left inactive globally — `gcloud config configurations create` activates
+  by default, which was reverted immediately since that would have changed
+  the active config for every terminal, not just this repo's).
+- Added `.envrc` (direnv) so any shell that `cd`s into this repo scopes
+  `gcloud` to that config via `CLOUDSDK_ACTIVE_CONFIG_NAME` for that shell
+  only, and also loads `.env`. Requires `brew install direnv` + a one-time
+  shell hook + `direnv allow` — not done automatically, since it touches
+  the user's global shell rc file.
+- Recommended (README step 9) a dedicated `radio-comp-app` service account
+  with a minimal `roles/datastore.user` binding, key referenced via
+  `GOOGLE_APPLICATION_CREDENTIALS` in `.env`, so the running app's identity
+  doesn't depend on whichever personal account is logged into gcloud at the
+  time — `google-cloud-firestore` picks that env var up automatically ahead
+  of ADC. Key should live outside the repo; `.gitignore` got a backstop
+  pattern (`*-key.json`, `service-account*.json`) in case one ever lands
+  inside it anyway.
+- Updated `config.py` / `firestore_store.py` docstrings and added
+  `.env.example` to match — they previously assumed plain
+  `gcloud auth application-default login` with no key management.
+
+Still needs the user to actually run: `gcloud auth login` under the correct
+account (with `radio-comp` active), the `brew install direnv` + shell hook
+step, and the service-account-creation commands in README step 9 — none of
+that could be done from this session (interactive browser auth, and the
+active gcloud credential here belongs to the other account, which doesn't
+have permission on this project anyway).

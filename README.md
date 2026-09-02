@@ -84,10 +84,36 @@ your behalf. It's about 10 minutes:
    Budgets & alerts → Create budget. £2–5/month is plenty as a tripwire —
    the point isn't the amount, it's getting an email if anything ever pushes
    past the free tier.
-4. **Enable the APIs this project needs:**
+4. **If you run more than one Google account** (e.g. this project's GCP
+   account is separate from a work account also logged into gcloud/VS Code
+   elsewhere), isolate this project's CLI identity *before* running any
+   `gcloud` commands against it, so a stray command in the wrong terminal
+   can't hit the wrong project:
    ```bash
-   gcloud config set project YOUR_PROJECT_ID
-   gcloud config set run/region europe-west2
+   gcloud config configurations create radio-comp   # inactive until targeted
+   gcloud config set project YOUR_PROJECT_ID --configuration=radio-comp
+   gcloud config set run/region europe-west2 --configuration=radio-comp
+   ```
+   Then, rather than `gcloud config configurations activate radio-comp`
+   (which changes the *global* active config — every terminal, every VS
+   Code window, until switched back), scope it per-shell with
+   `CLOUDSDK_ACTIVE_CONFIG_NAME=radio-comp`, so other terminals working on
+   other projects are never affected. This repo's `.envrc` already sets
+   that (plus loads `.env`) automatically whenever a shell `cd`s into it,
+   via [direnv](https://direnv.net/):
+   ```bash
+   brew install direnv
+   echo 'eval "$(direnv hook zsh)"' >> ~/.zshrc   # once per machine; restart terminal after
+   direnv allow                                    # once per repo, from inside it
+   ```
+   With that in place, any `gcloud auth login` / `gcloud services enable` /
+   etc. you run from a terminal opened in this folder targets `radio-comp`
+   (and the right account, once you log in — see next step) without
+   touching your other configs.
+5. **Log into the Google account tied to this project** (from a terminal in
+   this folder, so `radio-comp` is active per step 4): `gcloud auth login`.
+6. **Enable the APIs this project needs:**
+   ```bash
    gcloud services enable \
      run.googleapis.com \
      cloudscheduler.googleapis.com \
@@ -97,11 +123,11 @@ your behalf. It's about 10 minutes:
      cloudbuild.googleapis.com \
      artifactregistry.googleapis.com
    ```
-5. **Create the Firestore database** (native mode, not Datastore mode):
+7. **Create the Firestore database** (native mode, not Datastore mode):
    ```bash
    gcloud firestore databases create --location=europe-west2
    ```
-6. **Region choice: `europe-west2` (London), with one exception for Cloud
+8. **Region choice: `europe-west2` (London), with one exception for Cloud
    Storage.** Cloud Run, Firestore, and Cloud Scheduler's Always Free tiers
    all work fine in `europe-west2`, so this project standardises on it there
    — lower latency for a UK-based user, no free-tier cost. Cloud Storage's
@@ -109,18 +135,39 @@ your behalf. It's about 10 minutes:
    and `us-east1` — so if a Storage bucket is ever created for this project,
    it should be created in `us-central1` specifically, even though everything
    else stays in `europe-west2`. Don't "fix" this into one region.
+9. **Create a dedicated service account for the app itself**, rather than
+   letting it fall back to whichever personal account is logged into gcloud
+   — the same dual-account reasoning as step 4, but for the running code
+   rather than the CLI:
+   ```bash
+   gcloud iam service-accounts create radio-comp-app \
+     --display-name="radio-comp-app runtime identity"
+   gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+     --member="serviceAccount:radio-comp-app@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+     --role="roles/datastore.user"
+   gcloud iam service-accounts keys create ~/.config/gcloud/radio-comp-app-key.json \
+     --iam-account=radio-comp-app@YOUR_PROJECT_ID.iam.gserviceaccount.com
+   ```
+   Keep the key file **outside this repo** (the path above is a suggestion,
+   not a requirement) — `.gitignore` has a backstop pattern in case one ever
+   lands inside it, but the real safeguard is not putting it there in the
+   first place. If a Storage bucket gets created later per step 8, add a
+   second `add-iam-policy-binding` with `roles/storage.objectAdmin` at that
+   point rather than granting it up front.
 
-Once that's done, switch this codebase over by setting two environment variables
-(a `.env` file in the project root, picked up automatically):
+Once that's done, copy `.env.example` to `.env` and fill in:
 
 ```
 STORAGE_BACKEND=firestore
 GCP_PROJECT_ID=your-project-id
+GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/radio-comp-app-key.json
 ```
 
-and `gcloud auth application-default login` locally so `google-cloud-firestore`
-can find credentials. No other code changes needed — the storage layer was built
-for exactly this swap.
+`google-cloud-firestore` picks up `GOOGLE_APPLICATION_CREDENTIALS` automatically
+ahead of any other credential source — no code changes needed, and the app's
+identity is now decoupled from whatever's logged into gcloud locally. (Skip
+that line and run `gcloud auth application-default login` instead if you don't
+need that isolation — fine for a single-account setup.)
 
 ## Next steps (not built yet)
 
