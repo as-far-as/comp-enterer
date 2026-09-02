@@ -24,8 +24,20 @@ discovery adapter, all runnable locally today with **no GCP project required yet
   First run pulls whatever's currently listed into `data/promotions.json`; run it
   again and you'll see "0 new" since it dedupes against what it already knows.
 
-- `tests/` — offline tests against a saved real HTML fixture, so they don't
-  depend on Loquax's listing looking a particular way on any given day.
+- `src/radiocomp/compliance/` — first pass at the compliance engine (spec
+  section 4): `tandc.py` captures a `TandCSnapshot` of a promotion's own
+  page (narrow, phrase-based parsing — see its docstring for why it stays
+  shallow rather than trying to summarise arbitrary T&C prose), and
+  `engine.py` checks the two things spec section 4 names before anything
+  should be entered — already-entered, and cross-brand shared-limit
+  duplicates (Global's Heart/Capital/Smooth/Classic FM/LBC/Radio X share
+  one entry limit; a live example of exactly this — the same TUI gift-card
+  promotion under both Smooth Radio and Radio X — is what
+  `test_compliance_engine.py` checks against). No entry-execution engine
+  exists yet to actually gate, so this doesn't block anything on its own —
+  it surfaces what that engine will need to check once it does.
+- `tests/` — offline tests against saved real HTML fixtures, so they don't
+  depend on any live site looking a particular way on any given day.
 
 ## Update — first direct-station monitor built (talkSPORT)
 
@@ -194,10 +206,7 @@ for a service-account-key setup, in case a future account/org allows one.)
 
 ## Next steps (not built yet)
 
-1. TandCSnapshot capture + a compliance-engine first pass (spec section 4) —
-   the models and EntryChannel review flags are in place for this, the
-   clause-diffing logic itself isn't built yet.
-2. Wire up Cloud Scheduler → Cloud Run Job now that the GCP project exists —
+1. Wire up Cloud Scheduler → Cloud Run Job now that the GCP project exists —
    see the checklist above for the remaining commands to run, and re-verify
    the service-account Deny-policy question (step 10 above) before assuming
    Cloud Run's runtime identity can reach Firestore.

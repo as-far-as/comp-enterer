@@ -346,3 +346,54 @@ Also installed `playwright` + Chromium into `.venv` and uncommented it in
 though this adapter didn't end up needing it, since the next Playwright-
 requiring case (a real one will turn up eventually) shouldn't need to
 re-install it from scratch.
+
+## 2026-09-02 — Compliance engine, first pass (spec section 4)
+
+Built `src/radiocomp/compliance/`: `tandc.py` (T&C snapshot capture) and
+`engine.py` (the two checks spec section 4 names — already-entered, and
+cross-brand shared-limit duplicates). No entry-execution engine exists yet
+(spec section 5, not built), so nothing here actually blocks an entry from
+happening — it's a pair of testable functions surfacing exactly what that
+engine will need to check once it exists, run today against what's already
+been discovered.
+
+`tandc.py`'s two parsed fields (`parsed_free_route_exists`,
+`parsed_entry_limit`) turned out to need to stay much shallower than a
+first instinct would suggest, once checked against talkSPORT's own real
+fixtures rather than assumed: real entry-limit clauses are genuinely
+complex and multi-channel ("up to a maximum of 100 times Online", "£40 on
+paid SMS entries", "116 postal entries" — no single phrase to extract), and
+a bare "free entry" phrase match turned out to sit inside a *paid*
+boost-offer clause on the same page. Both fields now only fire on a narrow
+set of known-reliable phrasings (reusing the same "standard rate"/"standard
+network rate" vocabulary talksport.py and radioexe.py already rely on for
+the same reason) and default to `None` otherwise — another instance of this
+project's standing rule: an honest gap beats a confident wrong parse.
+`raw_text` + `raw_text_hash` preserve everything else for an actual human
+read, which is the point of a *snapshot* rather than a full parse.
+
+`engine.py`'s cross-brand-duplicate check reuses ThePrizeFinder's own real
+fixture as its main test — the £4,000 TUI gift-card promotion that showed
+up under both Smooth Radio and Radio X (see the ThePrizeFinder build-log
+entry above) is a genuine live instance of the exact scenario spec section
+4 describes, so `test_compliance_engine.py` checks the real thing rather
+than a synthetic stand-in. Matching is deliberately narrow (exact title
+match once case/whitespace-normalised, same network, same deadline when
+both have one) rather than fuzzy string similarity — a missed match just
+means two separately-flagged promotions (safe), a false match would
+incorrectly suppress a real second entry opportunity (not safe). Network
+membership lists (`SHARED_LIMIT_NETWORKS`) are deliberately short, limited
+to station names this session could actually confirm live — several
+plausible Bauer/Global regional names turned out to have moved between
+groups or been retired when checked earlier this session (see the Station-
+seed build-log entry above); extend the lists as more get confirmed rather
+than guessing from names alone.
+
+Ran both modules live against real local data from earlier sessions'
+ingestion runs (not just fixtures): `check_promotion()` correctly flagged
+both real TUI gift-card promotions in `data/promotions.json` as cross-brand
+duplicates of each other, and `capture_snapshot()` correctly found
+`parsed_free_route_exists=True` for Radio Exe's "Make Me A Winner!" (which
+has a standard-rate phone route) and `None` for "Free Film Friday" (WhatsApp/
+email entry only, no rate wording on the page at all). 33/33 tests passing
+(12 new).
