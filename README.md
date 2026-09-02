@@ -87,7 +87,7 @@ your behalf. It's about 10 minutes:
 4. **Enable the APIs this project needs:**
    ```bash
    gcloud config set project YOUR_PROJECT_ID
-   gcloud config set run/region us-central1
+   gcloud config set run/region europe-west2
    gcloud services enable \
      run.googleapis.com \
      cloudscheduler.googleapis.com \
@@ -99,11 +99,16 @@ your behalf. It's about 10 minutes:
    ```
 5. **Create the Firestore database** (native mode, not Datastore mode):
    ```bash
-   gcloud firestore databases create --location=us-central1
+   gcloud firestore databases create --location=europe-west2
    ```
-6. **Keep everything in `us-central1`** — that's where the region-locked parts
-   of the free tier (Cloud Storage, and Compute Engine if it's ever used) apply,
-   so it's simplest to standardise on it everywhere rather than mixing regions.
+6. **Region choice: `europe-west2` (London), with one exception for Cloud
+   Storage.** Cloud Run, Firestore, and Cloud Scheduler's Always Free tiers
+   all work fine in `europe-west2`, so this project standardises on it there
+   — lower latency for a UK-based user, no free-tier cost. Cloud Storage's
+   Always Free tier, however, is only available in `us-west1`, `us-central1`,
+   and `us-east1` — so if a Storage bucket is ever created for this project,
+   it should be created in `us-central1` specifically, even though everything
+   else stays in `europe-west2`. Don't "fix" this into one region.
 
 Once that's done, switch this codebase over by setting two environment variables
 (a `.env` file in the project root, picked up automatically):

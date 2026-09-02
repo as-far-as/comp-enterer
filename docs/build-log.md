@@ -80,3 +80,16 @@ will not be kept in sync automatically once VS Code work begins; if this
 build log is updated going forward, update `docs/build-log.md` in the repo
 (the canonical copy) and, if this Project is still in active use, ask
 the user before assuming this Project doc should also change.
+
+## 2026-09-02 — GCP project live in europe-west2
+
+The remaining `gcloud` setup (API enablement, Firestore database creation)
+is done for `project-a6778446-201f-4aa5-a03`, using `europe-west2` (London)
+rather than the `us-central1` originally assumed in the spec/README — the
+user is UK-based, and Cloud Run, Firestore, and Cloud Scheduler's Always
+Free tiers all work the same there. `GCP_REGION`'s default in
+`src/radiocomp/config.py` and the `gcloud` commands in README.md have been
+updated to match. The one carve-out: Cloud Storage's Always Free tier only
+applies to `us-west1`/`us-central1`/`us-east1`, so if a Storage bucket is
+ever created for this project it should go in `us-central1` specifically,
+not `europe-west2` — see README.md's GCP setup section.

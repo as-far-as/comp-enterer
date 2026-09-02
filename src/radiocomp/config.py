@@ -33,7 +33,7 @@ LOCAL_DATA_DIR = PROJECT_ROOT / "data"
 
 STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "local")  # "local" | "firestore"
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "")
-GCP_REGION = os.environ.get("GCP_REGION", "us-central1")
+GCP_REGION = os.environ.get("GCP_REGION", "europe-west2")
 
 # Polite crawling defaults — see aggregators/loquax.py for why this matters.
 USER_AGENT = os.environ.get(
