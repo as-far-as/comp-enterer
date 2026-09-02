@@ -194,14 +194,10 @@ for a service-account-key setup, in case a future account/org allows one.)
 
 ## Next steps (not built yet)
 
-1. A second direct-station monitor, ideally one that actually needs
-   Playwright (a JS-heavy or bot-defended site), so the "when do we actually
-   need a real browser vs. plain httpx" judgement call gets tested against a
-   second real case rather than generalised from one.
-2. TandCSnapshot capture + a compliance-engine first pass (spec section 4) —
+1. TandCSnapshot capture + a compliance-engine first pass (spec section 4) —
    the models and EntryChannel review flags are in place for this, the
    clause-diffing logic itself isn't built yet.
-3. Wire up Cloud Scheduler → Cloud Run Job now that the GCP project exists —
+2. Wire up Cloud Scheduler → Cloud Run Job now that the GCP project exists —
    see the checklist above for the remaining commands to run, and re-verify
    the service-account Deny-policy question (step 10 above) before assuming
    Cloud Run's runtime identity can reach Firestore.

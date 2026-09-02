@@ -282,3 +282,67 @@ idempotent — a second run added 0 new stations). 6 new tests on the seed
 data itself (no duplicate names, every station flagged local-independent,
 every base_url live-checked and https, no fabricated `ofcom_licence_ref`,
 manual-seeding disclosed in `notes`). 17/17 tests passing overall.
+
+## 2026-09-02 — Second direct-station monitor: Radio Exe, and a Playwright search that came up empty
+
+Went looking for a second direct-station monitor, explicitly hoping for one
+that genuinely needs Playwright this time (talkSPORT didn't, and that
+judgement call — browser vs. plain httpx — is worth testing against more
+than one case). Checked ~35 candidates: the 14 seeded local/independent
+stations, Global's Heart/Capital/Smooth, Bauer's Kiss/Absolute Radio/
+Greatest Hits Radio (via the shared hellorayo.co.uk platform), Nation
+Broadcasting's Nation Player platform, and a batch of other independent
+local stations, looking specifically for either genuine client-side-only
+rendering or real Cloudflare bot challenges.
+
+Result: almost everything server-renders its real content regardless of
+how JS-heavy it looks. Bauer's hellorayo.co.uk pages carry full React/Next
+hydration markers and 800KB+ of HTML but the actual competition titles are
+sitting right there in a server-rendered `__NEXT_DATA__` blob. Nation
+Player's site shows a cookie-consent interstitial and an "Aiir" JS-widget
+footer but both its listing and detail pages are fully readable via plain
+httpx — confirmed by rendering with Playwright too and finding the same
+content, just slower to get. Phoenix FM's Cloudflare-fronted site initially
+looked like a bot challenge (matched on `challenge-platform` in the page
+source) but that turned out to be Cloudflare's standard passive bot-
+detection script tag, not an actual block — the page loads fine either way.
+The one genuine case found — **Angel Radio**, a small nostalgia-format
+charity station built on Wix — really does need a browser (homepage visible
+text is ~90 characters via plain httpx *and* via a rendered Playwright
+page; real Wix content apparently loads even more lazily than a 6-second
+wait captures), but has no discoverable competition activity worth building
+a monitor around.
+
+Given that, and per the user's call on this trade-off, built the second
+monitor with plain httpx anyway: **Radio Exe** (`src/radiocomp/stations/
+radioexe.py`), on Nation Broadcasting's Nation Player platform. Two things
+worth flagging for future adapters on this platform (other Nation-branded
+stations likely share the same `c-pod__*` Aiir template classes):
+
+1. Entry-channel text reads a lot like talkSPORT's — the same "charged at
+   the standard rate" phrasing shows up for a phone-entry route here too,
+   and gets the same Gambling-Act-compliant free-route treatment (still
+   never auto-dialled, same non-negotiable constraint, just correctly
+   classified as `is_free_route=True`).
+2. One live competition asked for entry via **WhatsApp message** or
+   **email** — neither existed as an `EntryChannelType`. Added `EMAIL` and
+   `WHATSAPP` to the model (`models.py`) rather than force-fit them into
+   `SMS`/`WEB_FORM`, which would have misrepresented both their cost
+   profile and the fact that no automation path touches either. Both
+   always come through with `review_recommended=True` — no cost signal is
+   ever visible for these two in practice, so they're never confidently
+   marked free.
+
+Live one-off run (`python -m radiocomp.stations.radioexe`) against the real
+site found both currently-live Radio Exe competitions, classified 5 entry
+channels across them, matching the fixtures exactly. 4 new tests
+(listing extraction, multi-channel classification on the "Make Me A
+Winner!" network competition, WhatsApp/email capture-and-flag behaviour,
+and confirming a recurring weekly promo with no fixed date correctly stays
+`entry_deadline=None` rather than guessed). 21/21 tests passing overall.
+
+Also installed `playwright` + Chromium into `.venv` and uncommented it in
+`requirements.txt` while investigating the above — kept installed even
+though this adapter didn't end up needing it, since the next Playwright-
+requiring case (a real one will turn up eventually) shouldn't need to
+re-install it from scratch.

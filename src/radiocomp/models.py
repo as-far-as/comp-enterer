@@ -36,6 +36,10 @@ class EntryChannelType(str, Enum):
     # never auto-dialled, consistent with excluding all phone automation per the spec's decision, not just the
     # live-broadcast case that decision was originally about
     ON_AIR_CALL_IN = "on_air_call_in"  # tracked for visibility only — never auto-entered, see spec section 5
+    EMAIL = "email"  # "send your name and number to studio@..." — observed live on stations/radioexe.py
+    WHATSAPP = "whatsapp"  # "message your answer on WhatsApp <number>" — same discovery as EMAIL above; neither
+    # was anticipated by the original spec, and no automation path touches either, so they're modelled for
+    # accurate classification/review purposes only, not as a target for future auto-entry
 
 
 class DiscoveredVia(str, Enum):

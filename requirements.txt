@@ -5,8 +5,12 @@ python-dotenv>=1.0
 
 google-cloud-firestore>=2.16
 
-# Phase 1 (direct station monitoring):
-# playwright>=1.44
+# Installed for the direct-station-monitor search on 2026-09-02 (see
+# docs/build-log.md) — not currently used by any adapter (talksport.py and
+# radioexe.py both turned out fine with plain httpx), but the next
+# genuinely JS-required station shouldn't need this re-installed from
+# scratch, chromium included (`playwright install chromium`).
+playwright>=1.44
 
 # Phase 1 (dashboard + Telegram webhook):
 # fastapi>=0.111
