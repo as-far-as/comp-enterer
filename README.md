@@ -135,39 +135,48 @@ your behalf. It's about 10 minutes:
    and `us-east1` — so if a Storage bucket is ever created for this project,
    it should be created in `us-central1` specifically, even though everything
    else stays in `europe-west2`. Don't "fix" this into one region.
-9. **Create a dedicated service account for the app itself**, rather than
-   letting it fall back to whichever personal account is logged into gcloud
-   — the same dual-account reasoning as step 4, but for the running code
-   rather than the CLI:
-   ```bash
-   gcloud iam service-accounts create radio-comp-app \
-     --display-name="radio-comp-app runtime identity"
-   gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-     --member="serviceAccount:radio-comp-app@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
-     --role="roles/datastore.user"
-   gcloud iam service-accounts keys create ~/.config/gcloud/radio-comp-app-key.json \
-     --iam-account=radio-comp-app@YOUR_PROJECT_ID.iam.gserviceaccount.com
-   ```
-   Keep the key file **outside this repo** (the path above is a suggestion,
-   not a requirement) — `.gitignore` has a backstop pattern in case one ever
-   lands inside it, but the real safeguard is not putting it there in the
-   first place. If a Storage bucket gets created later per step 8, add a
-   second `add-iam-policy-binding` with `roles/storage.objectAdmin` at that
-   point rather than granting it up front.
+9. **A dedicated app service account was tried and abandoned — this project's
+   account can't have one.** The original plan here was a `radio-comp-app`
+   service account with a downloadable key (or, failing that, impersonation),
+   so the running app's GCP identity wouldn't depend on whichever personal
+   account happens to be logged into gcloud/VS Code — same reasoning as step
+   4, but for the code rather than the CLI. In practice, this project sits
+   under a Google Cloud organization (`183072770325`) that neither the
+   project Owner nor Claude Code could administer, and that organization
+   enforces (a) a policy blocking service-account key creation, and (b) an
+   opaque Deny policy — confirmed via the IAM Policy Troubleshooter, which
+   showed the underlying role as Granted but the resource's Deny policy as
+   "you don't have permission to view" — that blocks *any* service account
+   (regardless of role) from actually reading or writing Firestore. This
+   matches Google's automatic "default organization" wrapper for projects
+   created from a personal (non-Workspace) account: a security baseline the
+   account owner doesn't get to edit. Full diagnostic trail in
+   `docs/build-log.md`'s 2026-09-02 entries if this needs revisiting — e.g.
+   if the project ever moves under a real Cloud Identity/Workspace org, or
+   Google Support turns up a way to relax it.
+10. **So: local dev uses your own account's credentials directly** — no
+    service account, no impersonation:
+    ```bash
+    gcloud auth application-default login --configuration=radio-comp
+    ```
+    This is exactly the "no isolation" fallback step 4 was trying to avoid,
+    but it's what's actually available here. One consequence worth flagging
+    for later: Cloud Run's runtime identity is *also* a service account, so
+    build-log step 6 (wiring Cloud Scheduler → Cloud Run) may hit this same
+    wall in production, not just locally — worth re-testing at that point
+    rather than assuming it'll work.
 
 Once that's done, copy `.env.example` to `.env` and fill in:
 
 ```
 STORAGE_BACKEND=firestore
 GCP_PROJECT_ID=your-project-id
-GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/radio-comp-app-key.json
 ```
 
-`google-cloud-firestore` picks up `GOOGLE_APPLICATION_CREDENTIALS` automatically
-ahead of any other credential source — no code changes needed, and the app's
-identity is now decoupled from whatever's logged into gcloud locally. (Skip
-that line and run `gcloud auth application-default login` instead if you don't
-need that isolation — fine for a single-account setup.)
+`google-cloud-firestore` picks up the ADC set by `gcloud auth application-default
+login` automatically — no code changes, no `GOOGLE_APPLICATION_CREDENTIALS`
+needed. (That variable is still supported by `config.py`/`firestore_store.py`
+for a service-account-key setup, in case a future account/org allows one.)
 
 ## Next steps (not built yet)
 

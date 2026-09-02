@@ -6,12 +6,14 @@ know whether it's talking to a local JSON store or real Firestore.
 Once your GCP project exists:
   - set GCP_PROJECT_ID to your project id
   - set STORAGE_BACKEND=firestore
-  - credentials: set GOOGLE_APPLICATION_CREDENTIALS to a dedicated service
-    account key (see README's GCP setup section) so the app's GCP identity
-    doesn't depend on whichever personal Google account is logged into
-    gcloud/VS Code locally — or `gcloud auth application-default login` if
-    you don't need that isolation. Inside a Cloud Run Job/Service, the
-    runtime service account is used regardless.
+  - credentials: `gcloud auth application-default login` locally (google-cloud-
+    firestore picks up ADC automatically), or set GOOGLE_APPLICATION_CREDENTIALS
+    to a dedicated service account key if your account/org supports one — this
+    project's doesn't (an org-level Deny policy blocks all service-account
+    Firestore access here regardless of role; see README's GCP setup section
+    and docs/build-log.md, 2026-09-02, for the full diagnostic trail). Inside
+    a Cloud Run Job/Service, the runtime service account is used regardless —
+    worth re-checking against this same restriction before relying on it.
 
 Until then, STORAGE_BACKEND defaults to "local" and everything is written
 to ./data/*.json, so you can build and test the whole discovery pipeline

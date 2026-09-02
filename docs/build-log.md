@@ -129,3 +129,71 @@ step, and the service-account-creation commands in README step 9 — none of
 that could be done from this session (interactive browser auth, and the
 active gcloud credential here belongs to the other account, which doesn't
 have permission on this project anyway).
+
+## 2026-09-02 — Dedicated service account blocked by an org-level Deny policy
+
+Follow-up to the identity-isolation work above. Once the user logged into
+`adan.shennan96@gmail.com` (the account this GCP project actually belongs
+to) and it turned out to be a dual-account mixup along the way — a stray
+`gcloud auth login` landed on the `default` gcloud configuration instead of
+`radio-comp`, silently changing which account `default` pointed at; caught
+and fixed (`gcloud config set account ... --configuration=default/radio-comp`)
+before it caused real damage. Lesson: `gcloud auth login` / `application-
+default login` must only be run from a shell where the target named
+configuration is already active (or passed via `--configuration=`), never
+assumed.
+
+Then, trying to build the `radio-comp-app` service account (README step 9
+as originally written):
+
+1. **Key creation blocked.** `gcloud iam service-accounts keys create` failed
+   with `FAILED_PRECONDITION: constraints/iam.disableServiceAccountKeyCreation`.
+   Checking the resource hierarchy showed this project sits under a Google
+   Cloud **organization** (`183072770325`) — unusual for a project created
+   from a plain personal Gmail account. The user, despite being project
+   Owner, got permission-denied trying to override the policy even at the
+   project level (`orgpolicy.policies.setOrgPolicy` denied), and separately
+   couldn't list deny-policies at the org level either. Conclusion: this is
+   Google's automatic "default resource organization" wrapper for personal/
+   non-Workspace accounts, applying baseline security guardrails that the
+   nominal project owner doesn't administer.
+2. **Fell back to impersonation** (`gcloud auth application-default login
+   --impersonate-service-account=...`) instead of a key — this got past the
+   key-creation block (impersonation needs no key), but every actual
+   Firestore call then failed with a bare `403 Missing or insufficient
+   permissions`, for both reads and writes.
+3. **Ruled out role-scoping**: granted `roles/editor` (well beyond
+   `roles/datastore.user`) directly to the service account — identical 403.
+   Meanwhile the same calls made as the plain human user (`adan.shennan96@
+   gmail.com`, no impersonation) worked immediately. So the block is
+   specific to service-account-authenticated calls, not to Firestore, not
+   to role scope.
+4. **Confirmed via the IAM Policy Troubleshooter** (Console): for the
+   service account + `datastore.entities.get`/`create` on this project, the
+   classic role (Cloud Datastore User) showed **Granted** — but the page's
+   Deny Policy section read "You don't have permission to view any of the
+   resources' deny policies." A Deny policy is in effect, attached above
+   the project, invisible to the project owner. This is consistent with
+   point 1: a Google-managed guardrail on the auto-created org, not
+   something fixable via any `gcloud` command available here.
+5. **Decision: use the human account's own ADC directly for local dev**
+   (`gcloud auth application-default login --configuration=radio-comp`, no
+   impersonation) — confirmed working with a full round-trip smoke test
+   (write/read/list/delete) against real Firestore via `firestore_store.py`,
+   plus the existing 7/7 test suite still passing (those run against local
+   storage/fixtures, unaffected). This gives up the "app identity decoupled
+   from personal account" isolation goal, because the alternative (a
+   dedicated service account) isn't available on this account/org — not a
+   choice, a platform constraint.
+
+**Open risk carried forward** (noted in README step 10): Cloud Run's runtime
+identity is *also* a service account. If this Deny policy blocks service
+accounts broadly rather than specifically the ones this session touched, the
+eventual Cloud Scheduler → Cloud Run Job wiring (next-steps item 6) could hit
+the exact same wall in production. Re-test this specifically when building
+that piece — don't assume Cloud Run will work just because local ADC does.
+Cleanup note: the `radio-comp-app` service account and its `roles/datastore.
+user` binding were left in place (harmless, currently unusable) in case a
+future org/account change makes it usable; all one-off test bindings
+(`roles/editor` on `radio-comp-app`, anything on the default compute service
+account) were reverted.
