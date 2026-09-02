@@ -180,15 +180,16 @@ for a service-account-key setup, in case a future account/org allows one.)
 
 ## Next steps (not built yet)
 
-1. Second aggregator adapter (theprizefinder) — same pattern as `loquax.py`.
-2. Resolve the Ofcom station-directory gap above, or seed `Station` manually
+1. Resolve the Ofcom station-directory gap above, or seed `Station` manually
    for a first tranche of local/independent stations.
-3. A second direct-station monitor, ideally one that actually needs
+2. A second direct-station monitor, ideally one that actually needs
    Playwright (a JS-heavy or bot-defended site), so the "when do we actually
    need a real browser vs. plain httpx" judgement call gets tested against a
    second real case rather than generalised from one.
-4. TandCSnapshot capture + a compliance-engine first pass (spec section 4) —
+3. TandCSnapshot capture + a compliance-engine first pass (spec section 4) —
    the models and EntryChannel review flags are in place for this, the
    clause-diffing logic itself isn't built yet.
-5. Wire up Cloud Scheduler → Cloud Run Job now that the GCP project exists —
-   see the checklist above for the remaining commands to run.
+4. Wire up Cloud Scheduler → Cloud Run Job now that the GCP project exists —
+   see the checklist above for the remaining commands to run, and re-verify
+   the service-account Deny-policy question (step 10 above) before assuming
+   Cloud Run's runtime identity can reach Firestore.

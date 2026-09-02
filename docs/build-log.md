@@ -197,3 +197,37 @@ user` binding were left in place (harmless, currently unusable) in case a
 future org/account change makes it usable; all one-off test bindings
 (`roles/editor` on `radio-comp-app`, anything on the default compute service
 account) were reverted.
+
+## 2026-09-02 — ThePrizeFinder aggregator adapter
+
+Second aggregator, `src/radiocomp/aggregators/theprizefinder.py`, same shape
+as `loquax.py`: `fetch_listing_html()` / `parse_listing()` / `ingest()`,
+tested offline against a saved real fixture
+(`tests/fixtures/theprizefinder_radio_search.html`).
+
+Investigated theprizefinder.com's structure first (sitemap.xml, site nav) —
+unlike Loquax it has **no dedicated radio-competitions category**; its
+taxonomy is organised by prize theme (TV, social media, creative, seasonal),
+not broadcast medium. The closest available discovery mechanism is its
+keyword search, `/search/competitions?keys=radio`, which turned out to
+match promoter/company names as well as titles — so results are mostly
+genuine radio-station promoters (Virgin Radio, Smooth Radio, Radio X, YO1
+Radio observed live) plus at least one false positive that just happens to
+contain the word: "Radio Times", the listings magazine, isn't a broadcast
+station. Per the project's conservative-extraction stance, the adapter
+doesn't try to filter that out — station_name_raw is captured as seen,
+same as Loquax's unresolved-station pattern, and resolving/rejecting
+against real `Station` records is left for a future normalizer step. A
+test (`test_keyword_search_false_positives_are_captured_not_filtered`)
+exists specifically to lock in that "don't guess" behaviour rather than
+someone later "fixing" it into a fragile name-based exclusion list.
+
+Unlike Loquax, ThePrizeFinder's listing rows expose the promoter name and a
+machine-readable closing datetime (`<time datetime="...">`) directly on the
+anonymous page — no login-gated thread to work around, so `entry_deadline`
+and `station_name_raw` come through with real values immediately rather
+than needing a follow-up fetch.
+
+Live one-off run (`python -m radiocomp.aggregators.theprizefinder`) against
+the real site returned 9 promotions, matching the fixture. 11/11 tests
+passing (7 prior + 4 new).
