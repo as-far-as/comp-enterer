@@ -231,3 +231,54 @@ than needing a follow-up fetch.
 Live one-off run (`python -m radiocomp.aggregators.theprizefinder`) against
 the real site returned 9 promotions, matching the fixture. 11/11 tests
 passing (7 prior + 4 new).
+
+## 2026-09-02 — Ofcom register gap investigated properly; manual seed instead
+
+Went back to the "known gap" the original scoping session left open: no
+current, bulk-downloadable Ofcom register of licensed radio stations was
+ever located. Checked properly this time rather than re-flagging the same
+gap:
+
+- **data.gov.uk / CKAN** (`ckan.publishing.service.gov.uk`, filtered to the
+  Office of Communications organisation): the only radio-related datasets
+  are market/revenue statistics, plus one **technical-parameters-for-
+  broadcast-radio-transmitters** dataset (TxParams AM/MF/VHF/DAB CSVs) —
+  transmitter-level technical data, not a station register as such, and
+  every resource's metadata says **last updated 19 March 2019**.
+- The actual file URLs from that 2019 dataset (`ofcom.org.uk/__data/assets/
+  file/...`) are now **dead — 404**, confirming Ofcom has reorganised its
+  site since, consistent with what the original session already suspected.
+- The current `ofcom.org.uk` site has a **"Look up radio station details"**
+  tool (`/tv-radio-and-on-demand/analogue-radio/look-up-radio-station-
+  details`), but no download/export link or API surfaced in its markup —
+  it reads as a single-record interactive lookup, not a bulk source. Not
+  worth building a scraper against something that can't confirm when
+  you've found everything.
+
+**Conclusion: this gap stays open** — there is no clean current bulk
+register to import from right now, not just "wasn't found this time."
+
+Built the fallback both the spec and README already sanctioned instead:
+`src/radiocomp/stations/seed_local_independent.py`, a manually-picked first
+tranche of 14 `Station` records. Every candidate was checked live (fetched
+its own website, confirmed it resolves to itself with matching content)
+before inclusion — this caught real mistakes along the way worth recording:
+Swansea Sound, Trax FM, Dearne FM, Ridings FM, and Rutland Radio all
+redirected to `hellorayo.co.uk/greatest-hits/<region>` — they've been
+absorbed into Bauer's Greatest Hits Radio network and are no longer
+independent, contradicting what would've been a reasonable-sounding guess
+from memory. Rugby FM's domain has been squatted by an unrelated gambling
+content site. Several other candidates (Original 106 Aberdeen, Time 107.5,
+Tameside Radio, That's Solent, Chelmsford Radio) were dead domains or
+redirected somewhere unrelated. None of this would have surfaced without
+actually fetching each one — a direct instance of the project's "verify,
+don't guess" rule applying to station metadata, not just prize values or
+channel classification.
+
+Final 14: Isle of Wight Radio, Central FM, Drystone Radio, Banbury Sound,
+2BR, Energy FM, Manx Radio, Bolton FM, KMFM, Susy Radio, Amber Sound FM,
+Insanity Radio, Angel Radio, Diverse FM. `seed()` upserts by name (confirmed
+idempotent — a second run added 0 new stations). 6 new tests on the seed
+data itself (no duplicate names, every station flagged local-independent,
+every base_url live-checked and https, no fabricated `ofcom_licence_ref`,
+manual-seeding disclosed in `notes`). 17/17 tests passing overall.

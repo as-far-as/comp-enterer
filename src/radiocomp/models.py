@@ -45,10 +45,13 @@ class DiscoveredVia(str, Enum):
 
 class Station(BaseModel):
     """One radio station or network. Seeded initially from the networks
-    the research already mapped (Global, Rayo/Bauer, talkSPORT); the
-    Ofcom licensed-stations register is the intended source for expanding
-    into the local/independent tier — see ofcom_import.py (stubbed,
-    pending the right dataset URL — noted as an open follow-up)."""
+    the research already mapped (Global, Rayo/Bauer, talkSPORT). The
+    local/independent tier was meant to be seeded from Ofcom's licensed-
+    stations register, but no current bulk/downloadable version of that
+    register turned out to exist (see docs/build-log.md, 2026-09-02) — so
+    stations/seed_local_independent.py seeds a manually-picked, live-checked
+    first tranche instead. ofcom_licence_ref stays unset for anything from
+    that seed; it's not Ofcom-sourced data."""
 
     id: str = Field(default_factory=_new_id)
     name: str

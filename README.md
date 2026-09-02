@@ -58,14 +58,28 @@ Two things worth knowing before you extend it to other stations:
   headline. Better to leave `prize_value_gbp` as `None` than ship a wrong
   number into the EV model.
 
-## Known gap, deliberately left open
+## Known gap: no Ofcom bulk register, resolved with a manual seed instead
 
 The Ofcom licensed-radio-stations register was meant to seed the `Station`
-directory (per the spec, section 3) for the local/independent tier — I wasn't
-able to locate the right current dataset URL on Ofcom's site in this session
-(their site structure has changed since older references to it). Worth a
-follow-up look, or `data.gov.uk` may host the same register. Until then, local
-station coverage can be seeded manually with a handful of stations you care about.
+directory (per the spec, section 3) for the local/independent tier. Investigated
+properly on 2026-09-02 (data.gov.uk/CKAN's Ofcom datasets, the current
+ofcom.org.uk site) — no current, bulk-downloadable register turned up: the
+only bulk file that exists (Ofcom's TxParams technical-parameters CSVs) is
+dated March 2019 with dead file URLs, and the live site's "Look up radio
+station details" tool looks like a single-record lookup, not an export or
+API. Full trail in `docs/build-log.md`.
+
+So: `src/radiocomp/stations/seed_local_independent.py` seeds a manually-picked
+first tranche instead (14 stations, each checked live before inclusion — see
+that file's docstring for what got dropped along the way and why, including a
+few that turned out to have been quietly absorbed into Bauer's Greatest Hits
+Radio network). Run it with:
+```bash
+python -m radiocomp.stations.seed_local_independent
+```
+It's idempotent (upserts by name). Treat this as a starting point to correct
+or extend, not an authoritative register — no `ofcom_licence_ref` is set for
+any of these, since that data isn't available from this seed.
 
 ## Setting up the GCP project (your side)
 
@@ -180,16 +194,14 @@ for a service-account-key setup, in case a future account/org allows one.)
 
 ## Next steps (not built yet)
 
-1. Resolve the Ofcom station-directory gap above, or seed `Station` manually
-   for a first tranche of local/independent stations.
-2. A second direct-station monitor, ideally one that actually needs
+1. A second direct-station monitor, ideally one that actually needs
    Playwright (a JS-heavy or bot-defended site), so the "when do we actually
    need a real browser vs. plain httpx" judgement call gets tested against a
    second real case rather than generalised from one.
-3. TandCSnapshot capture + a compliance-engine first pass (spec section 4) —
+2. TandCSnapshot capture + a compliance-engine first pass (spec section 4) —
    the models and EntryChannel review flags are in place for this, the
    clause-diffing logic itself isn't built yet.
-4. Wire up Cloud Scheduler → Cloud Run Job now that the GCP project exists —
+3. Wire up Cloud Scheduler → Cloud Run Job now that the GCP project exists —
    see the checklist above for the remaining commands to run, and re-verify
    the service-account Deny-policy question (step 10 above) before assuming
    Cloud Run's runtime identity can reach Firestore.
