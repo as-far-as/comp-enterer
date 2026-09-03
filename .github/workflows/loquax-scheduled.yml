@@ -21,8 +21,6 @@ on:
   schedule:
     - cron: "17 * * * *" # hourly, offset from Cloud Run's :00 schedule
   workflow_dispatch:
-  push:
-    branches: [test-loquax-wif] # TEMPORARY — for verification only, removed before merging
 
 permissions:
   contents: read

@@ -1,8 +1,17 @@
 """
 Single entrypoint for a scheduled discovery pass — what the Cloud Run Job
-actually runs. Ties together every ingest()-shaped adapter built so far
-(two aggregators, two direct-station monitors) into one process with one
-exit code, so Cloud Scheduler has one thing to trigger rather than four.
+actually runs. Ties together every ingest()-shaped adapter that *can* run
+from Cloud Run (one aggregator, two direct-station monitors) into one
+process with one exit code, so Cloud Scheduler has one thing to trigger
+rather than three.
+
+loquax isn't included here — Loquax bans Google Cloud's shared egress IP
+range outright (confirmed live, 2026-09-03: "Your IP address has been
+banned."), so it would fail on every single run from this Job. It runs
+instead from a separate scheduled GitHub Actions workflow
+(.github/workflows/loquax-scheduled.yml), whose runners aren't banned,
+writing into the same GCS bucket via Workload Identity Federation. See
+docs/build-log.md for the full investigation.
 
 Deliberately just discovery, nothing more: it fetches and stores
 Promotions/EntryChannels, same as running each adapter by hand. It doesn't
@@ -34,14 +43,13 @@ logger = logging.getLogger(__name__)
 
 def _load_adapters() -> list[tuple[str, object]]:
     """(label, ingest callable) pairs — add new adapters here as they're
-    built. A fresh list per call, not a module-level global appended to,
-    so calling this more than once (e.g. from a test) can't duplicate
-    entries."""
-    from .aggregators import loquax, theprizefinder
+    built (except loquax — see module docstring). A fresh list per call,
+    not a module-level global appended to, so calling this more than once
+    (e.g. from a test) can't duplicate entries."""
+    from .aggregators import theprizefinder
     from .stations import radioexe, talksport
 
     return [
-        ("loquax", loquax.ingest),
         ("theprizefinder", theprizefinder.ingest),
         ("talksport", talksport.ingest),
         ("radioexe", radioexe.ingest),
