@@ -1,0 +1,55 @@
+name: Loquax scheduled ingestion
+
+# Loquax bans Google Cloud's shared egress IP range (confirmed live,
+# 2026-09-03 — see docs/build-log.md), so this adapter can't run on the
+# Cloud Run Job the other three adapters share (run_discovery.py). GitHub
+# Actions' runners aren't banned (confirmed the same day), so this runs
+# Loquax specifically from here instead, on its own schedule, writing into
+# the same GCS bucket Cloud Run uses.
+#
+# Auth is via Workload Identity Federation, not a downloadable service
+# account key — this project's GCP org blocks service-account key creation
+# entirely (see docs/build-log.md, 2026-09-02), and WIF sidesteps that by
+# exchanging GitHub's own OIDC token for short-lived GCP credentials on
+# each run. The trust is scoped specifically to this repo (see the
+# attribute-condition on the workload identity pool provider) — no other
+# GitHub repo could impersonate this identity even with the same
+# workload_identity_provider string, since GCP checks the token's own
+# `repository` claim against that condition.
+
+on:
+  schedule:
+    - cron: "17 * * * *" # hourly, offset from Cloud Run's :00 schedule
+  workflow_dispatch:
+  push:
+    branches: [test-loquax-wif] # TEMPORARY — for verification only, removed before merging
+
+permissions:
+  contents: read
+  id-token: write # required for requesting the OIDC token WIF exchanges
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/160318626997/locations/global/workloadIdentityPools/github-actions/providers/github-actions-provider
+          service_account: radio-comp-app@project-a6778446-201f-4aa5-a03.iam.gserviceaccount.com
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install pydantic httpx beautifulsoup4 python-dotenv google-cloud-storage
+
+      - name: Run Loquax ingestion
+        env:
+          STORAGE_BACKEND: gcs
+          GCP_PROJECT_ID: project-a6778446-201f-4aa5-a03
+          GCS_BUCKET_NAME: project-a6778446-201f-4aa5-a03-data
+          PYTHONPATH: src
+        run: python -m radiocomp.aggregators.loquax
