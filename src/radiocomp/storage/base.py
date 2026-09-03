@@ -1,8 +1,10 @@
 """
 Repository interface. Every collection in the data model gets one of
-these. There are two implementations (local_json.py and firestore.py) —
-which one you get back from get_repository() is decided purely by
-config.STORAGE_BACKEND, so calling code never branches on backend.
+these. There are three implementations (local_json.py, firestore_store.py,
+gcs_json.py) — which one you get back from get_repository() is decided
+purely by config.STORAGE_BACKEND, so calling code never branches on
+backend. gcs_json.py exists specifically for Cloud Run Jobs, which can't
+use firestore_store.py here — see that file's docstring for why.
 """
 
 from __future__ import annotations
@@ -35,6 +37,10 @@ def get_repository(collection_name: str, model_cls: Type[ModelT]) -> Repository[
         from .firestore_store import FirestoreRepository
 
         return FirestoreRepository(collection_name, model_cls)
+    elif config.STORAGE_BACKEND == "gcs":
+        from .gcs_json import GcsJsonRepository
+
+        return GcsJsonRepository(collection_name, model_cls)
     else:
         from .local_json import LocalJsonRepository
 

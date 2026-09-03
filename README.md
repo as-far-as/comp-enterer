@@ -9,10 +9,14 @@ discovery adapter, all runnable locally today with **no GCP project required yet
 
 - `src/radiocomp/models.py` — the full data model (Station, Promotion, TandCSnapshot,
   EntryChannel, EntryRecord, Outcome, UserProfile), as Pydantic models.
-- `src/radiocomp/storage/` — a storage layer with two interchangeable backends:
-  a local JSON store (the default, writes to `data/*.json`) and a Firestore store
-  (stubbed, ready to switch on once your GCP project exists). Nothing outside
-  `storage/` needs to change when you switch.
+- `src/radiocomp/storage/` — a storage layer with three interchangeable
+  backends, picked purely by `STORAGE_BACKEND`: a local JSON store (the
+  default, writes to `data/*.json`), a Firestore store (for local dev,
+  using your own account's credentials), and a Cloud Storage-backed JSON
+  store, `gcs_json.py` (what Cloud Run Jobs use — Cloud Run's runtime
+  service account can't reach Firestore on this project, confirmed by
+  actually running a real Cloud Run Job against it; see docs/build-log.md,
+  2026-09-02/03). Nothing outside `storage/` needs to change when you switch.
 - `src/radiocomp/aggregators/loquax.py` — a working, tested discovery adapter
   against Loquax's live radio-competitions listing. Run it yourself:
 
@@ -186,27 +190,69 @@ your behalf. It's about 10 minutes:
     gcloud auth application-default login --configuration=radio-comp
     ```
     This is exactly the "no isolation" fallback step 4 was trying to avoid,
-    but it's what's actually available here. One consequence worth flagging
-    for later: Cloud Run's runtime identity is *also* a service account, so
-    build-log step 6 (wiring Cloud Scheduler → Cloud Run) may hit this same
-    wall in production, not just locally — worth re-testing at that point
-    rather than assuming it'll work.
+    but it's what's actually available here.
+
+    Worth being honest about a real gap in this: Application Default
+    Credentials is a single **global** file
+    (`~/.config/gcloud/application_default_credentials.json`), not scoped
+    per gcloud configuration the way `radio-comp` vs `default` are. If you
+    also use ADC for other work (a data pipeline, another project), running
+    `gcloud auth application-default login` there will silently overwrite
+    this project's ADC, and vice versa — this actually happened once during
+    this project's own setup. There's no clean fix short of re-running the
+    login command for whichever project you need next; just know it's a
+    manual swap, not a permanent one.
+11. **Cloud Run's runtime identity hits the exact same Firestore wall —
+    confirmed by actually running a real Cloud Run Job against it**, not
+    just inferred from the local test above. It failed with the identical
+    `403 Missing or insufficient permissions`. The same check against
+    **Cloud Storage**, though, worked fine — so `STORAGE_BACKEND=gcs`
+    (`gcs_json.py`) is what anything running on Cloud Run uses instead of
+    Firestore. This needs its own bucket, created in `us-central1` per the
+    region rule in step 8:
+    ```bash
+    gcloud storage buckets create gs://YOUR_PROJECT_ID-data --location=us-central1
+    gcloud storage buckets add-iam-policy-binding gs://YOUR_PROJECT_ID-data \
+      --member="serviceAccount:YOUR_PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
+      --role="roles/storage.objectAdmin"
+    ```
+    (`YOUR_PROJECT_NUMBER-compute@developer.gserviceaccount.com` is Cloud
+    Run's default runtime identity unless you configure a custom one —
+    find the project number via `gcloud projects describe YOUR_PROJECT_ID`.)
+    Cloud Build's default service account needs its own routine grants too,
+    the first time you build/push an image on a project that's never used
+    Cloud Build before — `roles/storage.objectViewer` (to read its own
+    upload) and `roles/artifactregistry.writer` (to push), both on the same
+    default compute service account, both project-level bindings, both
+    one-time setup.
 
 Once that's done, copy `.env.example` to `.env` and fill in:
 
 ```
-STORAGE_BACKEND=firestore
+STORAGE_BACKEND=firestore   # local dev
 GCP_PROJECT_ID=your-project-id
 ```
 
-`google-cloud-firestore` picks up the ADC set by `gcloud auth application-default
-login` automatically — no code changes, no `GOOGLE_APPLICATION_CREDENTIALS`
-needed. (That variable is still supported by `config.py`/`firestore_store.py`
-for a service-account-key setup, in case a future account/org allows one.)
+or, for anything running on Cloud Run:
+
+```
+STORAGE_BACKEND=gcs
+GCP_PROJECT_ID=your-project-id
+GCS_BUCKET_NAME=your-project-id-data
+```
+
+`google-cloud-firestore`/`google-cloud-storage` pick up ADC (locally) or the
+runtime service account (on Cloud Run) automatically — no code changes, no
+`GOOGLE_APPLICATION_CREDENTIALS` needed. (That variable is still supported
+by `config.py`/`firestore_store.py` for a service-account-key setup, in
+case a future account/org allows one.)
 
 ## Next steps (not built yet)
 
-1. Wire up Cloud Scheduler → Cloud Run Job now that the GCP project exists —
-   see the checklist above for the remaining commands to run, and re-verify
-   the service-account Deny-policy question (step 10 above) before assuming
-   Cloud Run's runtime identity can reach Firestore.
+1. Containerize the actual app (a real `Dockerfile`, not the throwaway one
+   used to smoke-test the storage layer) and wire up Cloud Scheduler →
+   Cloud Run Job — the storage-layer question (step 11 above) is resolved,
+   so this is now just the deployment plumbing: build/push via the
+   `radio-comp` Artifact Registry repo, a Cloud Run Job running the
+   aggregators + station monitors + compliance check in one pass with
+   `STORAGE_BACKEND=gcs`, and a Cloud Scheduler job triggering it hourly.

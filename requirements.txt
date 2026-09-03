@@ -4,6 +4,7 @@ beautifulsoup4>=4.12
 python-dotenv>=1.0
 
 google-cloud-firestore>=2.16
+google-cloud-storage>=2.16  # gcs_json.py — used by Cloud Run Jobs, which can't reach Firestore here (see config.py)
 
 # Installed for the direct-station-monitor search on 2026-09-02 (see
 # docs/build-log.md) — not currently used by any adapter (talksport.py and

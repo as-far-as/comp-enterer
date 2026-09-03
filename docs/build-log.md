@@ -397,3 +397,92 @@ duplicates of each other, and `capture_snapshot()` correctly found
 has a standard-rate phone route) and `None` for "Free Film Friday" (WhatsApp/
 email entry only, no rate wording on the page at all). 33/33 tests passing
 (12 new).
+
+## 2026-09-03 — Billing account was closed; reopened
+
+Went to start on Cloud Scheduler → Cloud Run Job (build-log step 6) and hit
+`BILLING_DISABLED` trying to even list Artifact Registry repos, despite
+`gcloud billing projects describe` showing a billing account linked. Turned
+out `gcloud billing accounts describe` told the real story: the linked
+billing account itself had `open: false` — closed, not just unlinked,
+apparently because a valid payment method was never actually attached at
+setup time. User added a payment method and reopened it via the Console;
+confirmed fixed via the same `describe` command (`open: true`) and a
+successful `gcloud artifacts repositories list` call. This was a separate,
+simpler problem from the earlier org-level Deny-policy issue — worth not
+conflating the two "GCP won't let me do X" moments as the same root cause
+just because they showed up in the same session.
+
+## 2026-09-03 — Confirmed: Cloud Run can't reach Firestore either, but Cloud Storage works
+
+With billing fixed, ran the smoke test build-log 2026-09-02 flagged as
+needed before building the real Cloud Run pipeline: does Cloud Run's actual
+runtime identity hit the same Firestore Deny-policy wall the custom
+`radio-comp-app` service account did? Built a minimal container (`google-
+cloud-firestore`, one read/write against a throwaway collection), pushed it
+to a new Artifact Registry repo (`radio-comp`, europe-west2), ran it as a
+real Cloud Run Job with no custom service account (so it used the default
+compute service account, `PROJECT_NUMBER-compute@developer.gserviceaccount.com`
+— confirmed via the job's own execution spec). Result: identical `403
+Missing or insufficient permissions`, straight from Cloud Run's own logs,
+not a local inference. Confirms the org's Deny policy blocks *any* service
+account's Firestore access on this project, Cloud Run's own runtime
+identity included — not something specific to impersonation or to the
+custom service account from the 2026-09-02 investigation.
+
+Along the way, hit two more routine (not org-policy) permission gaps worth
+noting since they'll recur for anyone setting up Cloud Build fresh on a
+project that's never used it before: the default compute service account
+started with *zero* IAM roles at all, so `gcloud builds submit` failed
+first on `storage.objects.get` (couldn't read its own uploaded source
+tarball) and then, once that was granted, on
+`artifactregistry.repositories.uploadArtifacts` (couldn't push the built
+image). Granted `roles/storage.objectViewer` and `roles/artifactregistry.
+writer` to that service account at the project level and both resolved
+immediately — ordinary missing-grant issues, not the Deny-policy wall,
+confirmed by the fact granting the role actually worked (the Deny-policy
+case never responds to a role grant, as the 2026-09-02 `roles/editor` test
+already showed).
+
+Then tested the same default compute service account against **Cloud
+Storage** instead — created a throwaway bucket, granted `roles/storage.
+objectAdmin`, ran an equivalent Cloud Run Job doing one write + read-back.
+It worked (`GCS_OK: ok`). So the Deny policy is scoped to Firestore/
+Datastore specifically, not service accounts in general — a real, usable
+distinction, not just "everything is blocked here."
+
+Given that, built a third storage backend: `src/radiocomp/storage/
+gcs_json.py`, same one-JSON-blob-per-collection shape as `local_json.py`,
+picked via `STORAGE_BACKEND=gcs` (+ `GCS_BUCKET_NAME`) in `storage/base.py`.
+Created the real bucket for this (`project-a6778446-201f-4aa5-a03-data`,
+`us-central1` per the region rule already documented for Storage), granted
+the default compute service account `roles/storage.objectAdmin` on it.
+Verified `gcs_json.py`'s actual code — not a reimplementation, the real
+module — end-to-end inside a real Cloud Run Job (built a throwaway image
+copying in `src/radiocomp`, ran `get_repository('_cloudrun_gcs_smoketest',
+Station)` through a full add/get/list/cleanup cycle): completed
+successfully, `CLOUD_RUN_GCS_OK: Cloud Run GCS Smoke Test FM` in the logs.
+All test jobs, images, and the throwaway bucket were deleted afterward;
+the real `project-a6778446-201f-4aa5-a03-data` bucket and the `radio-comp`
+Artifact Registry repo stay, since the real pipeline will need both.
+
+One more instance of the global-ADC-file fragility already flagged on
+2026-09-02: partway through this session, a local Python script reading
+ADC (no `GOOGLE_APPLICATION_CREDENTIALS` set) resolved to `dbol-elt-runner@
+dbol-prod.iam.gserviceaccount.com` — the user's own work identity, not
+`adan.shennan96@gmail.com`, meaning something (most likely the user's own
+work tooling running `gcloud auth application-default login` for its own
+purposes elsewhere) had silently overwritten the shared ADC file since the
+last time this project used it. Worked around it for testing purposes by
+building `google.oauth2.credentials.Credentials` from `gcloud auth print-
+access-token --configuration=radio-comp` directly rather than fighting over
+the ADC file again — doesn't touch the global file at all, so it's a better
+default for one-off local verification than re-running `application-default
+login` back and forth. Cloud Run itself is entirely unaffected by any of
+this, since it never reads local ADC — only local testing of the Firestore
+path is exposed to this fragility.
+
+33/33 existing tests still passing (no test-suite changes this entry —
+this was infra investigation and a new storage backend verified via live
+Cloud Run runs, not fixture-based unit tests, matching how firestore_store.py
+itself was verified).
