@@ -253,29 +253,30 @@ case a future account/org allows one.)
 ## Update — live and scheduled: Cloud Scheduler → Cloud Run Job
 
 The full discovery pipeline now runs on its own, hourly, without your
-laptop. `src/radiocomp/run_discovery.py` is the entrypoint — it runs every
-`ingest()`-shaped adapter (both aggregators, both station monitors) in one
-process, catching and logging each one's errors independently so one
-station breaking doesn't take the others down; it only exits non-zero if
-*every* adapter failed. The `Dockerfile` builds a lean image around just
-that (no Playwright, no Firestore client — see the Dockerfile's own
-comment for why), pushed to the `radio-comp` Artifact Registry repo. A
-Cloud Run Job (`radio-comp-discovery`, `STORAGE_BACKEND=gcs`) runs it, and
-a Cloud Scheduler job (`radio-comp-discovery-hourly`, `0 * * * *`,
-Europe/London) triggers it — confirmed end-to-end with a real manual
-trigger, not just configured on paper: Scheduler → Cloud Run Job →
-completed successfully → new promotions landed in the real
-`project-a6778446-201f-4aa5-a03-data` bucket.
+laptop. `src/radiocomp/run_discovery.py` is the entrypoint for three of the
+four adapters (theprizefinder, talksport, radioexe) — it runs each one,
+catching and logging errors independently so one station breaking doesn't
+take the others down; it only exits non-zero if *every* adapter failed.
+The `Dockerfile` builds a lean image around just that (no Playwright, no
+Firestore client — see the Dockerfile's own comment for why), pushed to
+the `radio-comp` Artifact Registry repo. A Cloud Run Job
+(`radio-comp-discovery`, `STORAGE_BACKEND=gcs`) runs it, and a Cloud
+Scheduler job (`radio-comp-discovery-hourly`, `0 * * * *`, Europe/London)
+triggers it — confirmed end-to-end with a real manual trigger, not just
+configured on paper: Scheduler → Cloud Run Job → completed successfully →
+new promotions landed in the real `project-a6778446-201f-4aa5-a03-data`
+bucket.
 
-One live finding worth knowing: **Loquax returns `403 Forbidden` from
-Cloud Run's network** (works fine from a normal residential/laptop
-connection, confirmed side-by-side in the same run) — almost certainly an
-IP-reputation block on Google Cloud's egress ranges, not anything wrong
-with the adapter itself. The other three adapters aren't affected. Given
-`run_discovery.py`'s per-adapter error isolation, this doesn't take down
-the scheduled run, just quietly loses Loquax's coverage until/unless that
-gets investigated (a proxy, or asking Loquax, or accepting the gap) —
-worth knowing next time "why did Loquax stop showing up" comes up.
+**Loquax runs separately**, via its own scheduled GitHub Actions workflow
+(`.github/workflows/loquax-scheduled.yml`) rather than this Cloud Run Job —
+Loquax outright bans Google Cloud's shared egress IP range (`Your IP
+address has been banned.`, confirmed live), but GitHub Actions' runners
+aren't banned, confirmed the same way before building anything further.
+Auth is via Workload Identity Federation rather than a service-account key
+(still blocked on this project's org) — GitHub's own OIDC token gets
+exchanged for short-lived GCP credentials on each run, trust scoped
+specifically to this repo. See docs/build-log.md for the full
+investigation and setup.
 
 ## Update — a way to actually look at what's been found
 
@@ -298,8 +299,6 @@ actually gate, neither of which exist yet.
 
 ## Next steps (not built yet)
 
-1. Look into the Loquax-blocked-from-Cloud-Run finding above, if that
-   aggregator's coverage matters enough to chase.
-2. The Telegram bot (spec section 6) and entry-execution engine (spec
+1. The Telegram bot (spec section 6) and entry-execution engine (spec
    section 5) — the next real step up from "read-only list" toward
    "approve an entry with one tap and the system submits it."

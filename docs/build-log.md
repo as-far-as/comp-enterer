@@ -581,3 +581,78 @@ credentials trick from 2026-09-02/03 rather than fighting the shared ADC
 file again. 4 new tests on the pure formatting logic (`_format_channel`);
 the storage-reading `main()` itself is exercised live rather than unit
 tested, same convention as the storage backends. 41/41 tests passing.
+
+## 2026-09-03 — Loquax's Cloud Run block diagnosed and fixed via GitHub Actions
+
+User asked how important Loquax's coverage actually was and whether there
+was a free fix, rather than accepting the gap or paying for one. Worth
+actually diagnosing before answering either question.
+
+**Diagnosis.** Built a throwaway Cloud Run Job that fetched Loquax's
+listing page and printed the full response (headers + visible text, not
+just the status code seen in run_discovery.py's logs). The body wasn't a
+Cloudflare challenge page — it was XenForo's own generic error template,
+and the actual visible text was unambiguous: **"Your IP address has been
+banned."** An application-level ban by the forum software itself (or an
+integrated IP-reputation plugin), not a User-Agent or header issue — the
+same User-Agent works fine locally. Almost certainly Google Cloud's shared
+egress IP pool got flagged by unrelated traffic from other GCP tenants
+sharing those same IPs, not anything about this adapter's own behaviour.
+Cleaned up the diagnostic job/image afterward.
+
+**Considered and rejected**: Cloud NAT with a static IP, or a residential-
+proxy service — both add ongoing cost for restoring one aggregator's
+coverage, when the marginal value of that coverage is already reduced by
+Loquax's own pre-existing limitation (station name unresolved on a
+meaningful share of its listings — see loquax.py's docstring, unrelated to
+today's ban).
+
+**The actual fix, tested before building anything**: pushed a throwaway
+GitHub Actions workflow (`test-loquax-network` branch, deleted after) that
+just curled Loquax's listing page from a GitHub-hosted runner and committed
+the raw response to the branch (worked around `gh` CLI being logged into
+the wrong GitHub account for this repo — plain `git push`/`fetch` already
+had working credentials, so the Action wrote its result back as a commit
+instead, read via `git show origin/<branch>:<file>` with zero extra auth
+needed). Result: `HTTP status: 200`, the real listing page — GitHub
+Actions' runners aren't on Loquax's ban list. Confirmed *before* building
+any real infrastructure, per the project's own "verify against something
+real" habit.
+
+**Built once confirmed**: Loquax now runs from
+`.github/workflows/loquax-scheduled.yml` (hourly, offset `:17` from Cloud
+Run's `:00` schedule) instead of `run_discovery.py`/Cloud Run. Auth is
+Workload Identity Federation, not a downloadable service-account key —
+still blocked on this project's org (2026-09-02) — so GitHub's OIDC token
+gets exchanged for short-lived GCP credentials each run instead. Setup:
+
+- A Workload Identity Pool (`github-actions`) + OIDC provider
+  (`github-actions-provider`, issuer `https://token.actions.githubusercontent.com`),
+  with an **attribute condition restricting it to `assertion.repository ==
+  'as-far-as/comp-enterer'`** — no other GitHub repo could impersonate this
+  identity even with the same provider resource name.
+- Reused the existing (previously unusable) `radio-comp-app` service
+  account: bound `roles/iam.workloadIdentityUser` to the specific
+  principalSet for this repo, and granted it `roles/storage.objectAdmin`
+  on the real bucket (its earlier `roles/datastore.user` binding is now
+  simply dead weight from the abandoned Firestore-service-account attempt).
+
+**Verified end-to-end before merging**, same test-branch pattern as the
+diagnosis step: temporarily added a `push: branches: [test-loquax-wif]`
+trigger, pushed, watched the real bucket's `promotions.json` go from 18 to
+25 promotions (7 new, real Loquax competitions, `station_name_raw`
+correctly showing "(unresolved — see Loquax thread)" per that adapter's
+existing honest-gap design) — confirmed via `gcloud storage cat`, not
+inferred from the workflow "looking right." Removed the temporary trigger
+and merged to main.
+
+Updated `run_discovery.py` accordingly: `loquax` removed from its adapter
+list (it would fail every single time from Cloud Run, no point calling it
+there), with the module docstring explaining where it actually runs now.
+41/41 tests still passing (no test changes needed — `_load_adapters()`'s
+own tests use fake callables, unaffected by which real adapters are
+listed).
+
+Coverage is now fully automated across all four discovery adapters again,
+each from whichever network can actually reach it — no ongoing cost, no
+manual intervention, no laptop required for any of it.
