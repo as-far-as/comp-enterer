@@ -40,6 +40,9 @@ discovery adapter, all runnable locally today with **no GCP project required yet
   `test_compliance_engine.py` checks against). No entry-execution engine
   exists yet to actually gate, so this doesn't block anything on its own —
   it surfaces what that engine will need to check once it does.
+- `src/radiocomp/run_discovery.py` + `Dockerfile` — the scheduled-run
+  entrypoint and its container image. This is what actually runs hourly on
+  Cloud Run now — see the "live and scheduled" update below.
 - `tests/` — offline tests against saved real HTML fixtures, so they don't
   depend on any live site looking a particular way on any given day.
 
@@ -247,12 +250,38 @@ runtime service account (on Cloud Run) automatically — no code changes, no
 by `config.py`/`firestore_store.py` for a service-account-key setup, in
 case a future account/org allows one.)
 
+## Update — live and scheduled: Cloud Scheduler → Cloud Run Job
+
+The full discovery pipeline now runs on its own, hourly, without your
+laptop. `src/radiocomp/run_discovery.py` is the entrypoint — it runs every
+`ingest()`-shaped adapter (both aggregators, both station monitors) in one
+process, catching and logging each one's errors independently so one
+station breaking doesn't take the others down; it only exits non-zero if
+*every* adapter failed. The `Dockerfile` builds a lean image around just
+that (no Playwright, no Firestore client — see the Dockerfile's own
+comment for why), pushed to the `radio-comp` Artifact Registry repo. A
+Cloud Run Job (`radio-comp-discovery`, `STORAGE_BACKEND=gcs`) runs it, and
+a Cloud Scheduler job (`radio-comp-discovery-hourly`, `0 * * * *`,
+Europe/London) triggers it — confirmed end-to-end with a real manual
+trigger, not just configured on paper: Scheduler → Cloud Run Job →
+completed successfully → new promotions landed in the real
+`project-a6778446-201f-4aa5-a03-data` bucket.
+
+One live finding worth knowing: **Loquax returns `403 Forbidden` from
+Cloud Run's network** (works fine from a normal residential/laptop
+connection, confirmed side-by-side in the same run) — almost certainly an
+IP-reputation block on Google Cloud's egress ranges, not anything wrong
+with the adapter itself. The other three adapters aren't affected. Given
+`run_discovery.py`'s per-adapter error isolation, this doesn't take down
+the scheduled run, just quietly loses Loquax's coverage until/unless that
+gets investigated (a proxy, or asking Loquax, or accepting the gap) —
+worth knowing next time "why did Loquax stop showing up" comes up.
+
 ## Next steps (not built yet)
 
-1. Containerize the actual app (a real `Dockerfile`, not the throwaway one
-   used to smoke-test the storage layer) and wire up Cloud Scheduler →
-   Cloud Run Job — the storage-layer question (step 11 above) is resolved,
-   so this is now just the deployment plumbing: build/push via the
-   `radio-comp` Artifact Registry repo, a Cloud Run Job running the
-   aggregators + station monitors + compliance check in one pass with
-   `STORAGE_BACKEND=gcs`, and a Cloud Scheduler job triggering it hourly.
+1. Look into the Loquax-blocked-from-Cloud-Run finding above, if that
+   aggregator's coverage matters enough to chase.
+2. Wire the compliance engine (`compliance/engine.py`) into something that
+   actually surfaces its findings to you day-to-day — right now it's only
+   run ad hoc; there's no dashboard or notification layer yet (spec section
+   6), and no entry-execution engine (spec section 5) for it to gate.

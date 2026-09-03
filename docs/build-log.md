@@ -486,3 +486,70 @@ path is exposed to this fragility.
 this was infra investigation and a new storage backend verified via live
 Cloud Run runs, not fixture-based unit tests, matching how firestore_store.py
 itself was verified).
+
+## 2026-09-03 — Cloud Scheduler → Cloud Run Job: live, hourly, end-to-end
+
+With `gcs_json.py` proven, built and shipped the real scheduled pipeline.
+
+`src/radiocomp/run_discovery.py`: one entrypoint running every adapter
+(`loquax`, `theprizefinder`, `talksport`, `radioexe`) in sequence, catching
+each one's exceptions independently — one station breaking shouldn't take
+the others down, only exits non-zero if literally everything failed. Caught
+a real bug writing the first version of this: `_load_adapters()` appended
+to a module-level list rather than returning a fresh one each call, so
+calling it twice (which a quick manual test of the partial-failure path
+did) silently duplicated every adapter. Refactored to return a plain list
+instead of mutating a global — simpler and the bug class isn't possible
+anymore. 4 new tests (`test_run_discovery.py`) using fake ingest()
+callables rather than the real adapters, which already have their own
+fixture-based coverage; these just check the orchestration logic itself.
+37/37 tests passing.
+
+`Dockerfile`: deliberately not `pip install -r requirements.txt` — that
+also pulls in Playwright (unused by any adapter so far, large Chromium
+download) and `google-cloud-firestore` (Cloud Run can't reach Firestore at
+all here). Just the five packages `run_discovery`'s adapters actually
+import. Built and pushed to the `radio-comp` Artifact Registry repo via
+`gcloud builds submit`.
+
+Created the real Cloud Run Job, `radio-comp-discovery`
+(`STORAGE_BACKEND=gcs`, 512Mi/1cpu, 300s timeout). First real execution: 3
+of 4 adapters succeeded, 18 new promotions written to the real
+`project-a6778446-201f-4aa5-a03-data` bucket — genuine production data now,
+not a smoke test. Confirmed via `gcloud storage cat` on the actual blob.
+
+**Loquax returned `403 Forbidden` from Cloud Run specifically** — same
+adapter, same code, works fine run locally (confirmed side-by-side, same
+session). Almost certainly Loquax blocking Google Cloud's IP ranges by
+reputation, not a bug in the adapter. `run_discovery.py`'s per-adapter
+isolation meant this didn't take the run down — 3/4 succeeded, exit 0 —
+but it's a real, currently-unresolved gap in Loquax's coverage specifically
+from the scheduled job. Left as a known issue (README's "Next steps") since
+diagnosing/fixing an IP-reputation block is its own piece of work, not
+something to solve as a side effect of wiring up Scheduler.
+
+Wired Cloud Scheduler: granted the default compute service account
+`roles/run.invoker` on the job (needed for Scheduler's OAuth-authenticated
+HTTP call to the Cloud Run Admin API — a `run.jobs.run` permission check,
+unrelated to the Firestore Deny policy, and unaffected by it, consistent
+with everything else this session found about that policy being scoped to
+Firestore/Datastore specifically). Created `radio-comp-discovery-hourly`
+(`0 * * * *`, Europe/London) targeting the Run Admin API's `:run` endpoint.
+Confirmed the whole chain actually works, not just "looks right in
+`describe`" — manually triggered via `gcloud scheduler jobs run`, watched a
+new Cloud Run execution appear a few seconds later
+(`radio-comp-discovery-q7ssh`, run by the compute service account, not a
+human — exactly what a real scheduled trigger should look like), watched
+it complete successfully in 48s.
+
+Cleanup: none needed this time — `radio-comp-discovery` (the job),
+`radio-comp-discovery-hourly` (the schedule), and the `discovery` image are
+all the real, permanent pipeline now, not throwaway test resources.
+
+The discovery half of this project (spec Phase 0) now runs entirely on its
+own, hourly, without any machine of the user's needing to be on — the
+"runs in the background, not tied to my laptop" goal from the spec's
+hosting section is live. What's not built yet: anything downstream of
+discovery (compliance engine wiring into a real workflow, notification
+layer, entry-execution engine) — this only ever writes Promotions/
+EntryChannels, same as running an adapter by hand always did.
