@@ -553,3 +553,31 @@ hosting section is live. What's not built yet: anything downstream of
 discovery (compliance engine wiring into a real workflow, notification
 layer, entry-execution engine) — this only ever writes Promotions/
 EntryChannels, same as running an adapter by hand always did.
+
+## 2026-09-03 — Read-only view of what's actually been discovered
+
+User asked, reasonably, how they were meant to interact with any of this —
+the honest answer at that point was "you can't, it's raw JSON in a
+bucket." Confirmed the actual entry-drafting/submission plan (spec section
+5) matches what the user expected in shape (system fills the form and
+drafts it, human approves, system submits — not fully manual, not fully
+autonomous either; creative/skill-based questions are explicitly never
+auto-answered, phone/call-in entries never automated at all), but none of
+that exists yet. Rather than build straight into the Telegram bot (spec
+section 6, which needs the entry-execution engine from section 5 to
+actually gate anything — building the approve/skip UI before there's
+anything for it to approve would be building ahead of what's real), built
+the smallest useful thing first: `src/radiocomp/view_promotions.py`, a
+read-only CLI listing every known Promotion (soonest deadline first) with
+its EntryChannels and a live compliance-engine check run inline, so a
+cross-brand duplicate or already-entered promotion is visible without a
+separate step.
+
+Verified against both real local test data (confirmed the TUI cross-brand
+duplicate note renders correctly) and the real GCS-backed production data
+from the live scheduled job (18 promotions, matches what
+`gcloud storage cat` showed directly) — using the same token-based
+credentials trick from 2026-09-02/03 rather than fighting the shared ADC
+file again. 4 new tests on the pure formatting logic (`_format_channel`);
+the storage-reading `main()` itself is exercised live rather than unit
+tested, same convention as the storage backends. 41/41 tests passing.

@@ -277,11 +277,29 @@ the scheduled run, just quietly loses Loquax's coverage until/unless that
 gets investigated (a proxy, or asking Loquax, or accepting the gap) —
 worth knowing next time "why did Loquax stop showing up" comes up.
 
+## Update — a way to actually look at what's been found
+
+Until now, the scheduled job's output only existed as raw JSON — readable
+with `gcloud storage cat`, not really readable by a person. `src/radiocomp/
+view_promotions.py` is the smallest fix for that: lists every known
+`Promotion`, soonest deadline first, with its `EntryChannel`s
+(FREE/PAID/REVIEW, same flags each adapter's own CLI output uses) and a
+compliance-engine check (spec section 4) run against it inline — so an
+already-entered or cross-brand-duplicate promotion shows a `!!` note right
+there, no separate step needed. Reads whatever `STORAGE_BACKEND` is
+configured, same as every adapter — point it at `local`, `firestore`, or
+`gcs` (the real scheduled data) via `.env`. Run it:
+```bash
+PYTHONPATH=src python -m radiocomp.view_promotions
+```
+Still just a read-only list, not the Telegram approve/skip bot from spec
+section 6 — that needs an entry-execution engine (spec section 5) to
+actually gate, neither of which exist yet.
+
 ## Next steps (not built yet)
 
 1. Look into the Loquax-blocked-from-Cloud-Run finding above, if that
    aggregator's coverage matters enough to chase.
-2. Wire the compliance engine (`compliance/engine.py`) into something that
-   actually surfaces its findings to you day-to-day — right now it's only
-   run ad hoc; there's no dashboard or notification layer yet (spec section
-   6), and no entry-execution engine (spec section 5) for it to gate.
+2. The Telegram bot (spec section 6) and entry-execution engine (spec
+   section 5) — the next real step up from "read-only list" toward
+   "approve an entry with one tap and the system submits it."
