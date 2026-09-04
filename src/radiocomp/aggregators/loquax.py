@@ -147,6 +147,11 @@ def ingest() -> list[Promotion]:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    # httpx logs full request URLs at INFO, and Telegram's Bot API puts
+    # the bot token directly in the URL path — this would otherwise leak
+    # the token into logs on every notify call (confirmed live,
+    # 2026-09-04). See notify/telegram_client.py.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     fresh = ingest()
     print(f"\n{len(fresh)} new competition(s) found:\n")
     for p in fresh:

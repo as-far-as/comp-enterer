@@ -97,4 +97,9 @@ def main() -> int:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    # httpx logs full request URLs at INFO, and Telegram's Bot API puts
+    # the bot token directly in the URL path — this would otherwise leak
+    # the token into Cloud Logging on every notify call (confirmed live,
+    # 2026-09-04). See notify/telegram_client.py.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     sys.exit(main())

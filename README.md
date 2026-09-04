@@ -339,8 +339,14 @@ tool calls):
 2. Message it once, then `curl "https://api.telegram.org/bot<TOKEN>/getUpdates"`
    to read back your chat ID.
 3. `printf '%s' "<token>" | gcloud secrets create telegram-bot-token --data-file=-`
-   and `openssl rand -hex 32 | gcloud secrets create telegram-webhook-secret --data-file=-`
-   (both `--configuration=radio-comp`).
+   and `printf '%s' "$(openssl rand -hex 32)" | gcloud secrets create telegram-webhook-secret --data-file=-`
+   (both `--configuration=radio-comp`). Use the `printf '%s' "$(...)"`
+   wrapper, not a raw pipe from `openssl rand` — `openssl rand -hex 32`
+   prints a trailing newline, which a raw pipe stores as part of the
+   secret; Telegram's own registered value never has one, so the two
+   silently stop matching. (`webhook/app.py` now `.strip()`s at comparison
+   time regardless, so this isn't load-bearing anymore, but a clean secret
+   is one less thing to think about.)
 4. Add `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` as GitHub repository secrets
    for the Loquax/GitHub Actions path.
 5. Once the webhook Service is deployed, register it yourself (needs the
@@ -353,6 +359,17 @@ tool calls):
    ```
 6. Don't call `getUpdates` again afterward — Telegram only delivers to one
    mechanism at a time, and polling silently breaks webhook delivery.
+
+**A real credential leak found and fixed during setup, worth knowing
+about**: `httpx` logs the full request URL at INFO level, and Telegram's
+Bot API puts the bot token directly in the URL path
+(`api.telegram.org/bot<TOKEN>/...`) — so until this was caught, every
+outbound call logged the live token straight into Cloud Logging. Fixed by
+setting the `httpx` logger to `WARNING` in every entrypoint that imports
+`notify/` (`run_discovery.py`, `loquax.py`'s `__main__`, `webhook/app.py`).
+If you're re-provisioning this bot, rotate the token afterward regardless
+(`@BotFather` → `/mybots` → your bot → API Token → Revoke) — treat an
+exposed credential as compromised even once the leak itself is fixed.
 
 See docs/build-log.md for the full build/deploy trail.
 

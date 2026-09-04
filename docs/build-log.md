@@ -751,3 +751,85 @@ the existing `radio-comp-discovery` Job, adding the two GitHub repo
 secrets for the Loquax path, and registering the webhook with Telegram —
 then the actual live end-to-end test: a real message, a real tap, a real
 recorded decision.
+
+## 2026-09-04 — Telegram bot deployed and live-verified; three real bugs found and fixed along the way
+
+Finished the infra from the entry above: user created the bot
+(`Radio Comp Enterer`, `@radio_comp_alerts_bot`) via the real `@BotFather`
+(a first attempt found an impersonator username instead — worth double-
+checking the blue checkmark), created both secrets, added the GitHub repo
+secrets. Granted `roles/secretmanager.secretAccessor` on both secrets to
+the default compute service account, built and pushed `Dockerfile.webhook`,
+deployed `radio-comp-webhook` (Cloud Run Service, `europe-west2`,
+`--allow-unauthenticated`), rebuilt and redeployed the discovery Job's
+image (it needed rebuilding too — `run_discovery.py`/`loquax.py`'s notify
+calls were new code not yet baked into the previously-deployed image),
+wired `TELEGRAM_BOT_TOKEN` (via Secret Manager) and `TELEGRAM_CHAT_ID`
+(plain env var) into the discovery Job.
+
+**Bug 1 — `/healthz` silently 404s, never reaching the container.**
+Confirmed via Cloud Run logs: the request never generated a log entry at
+all, while every other path (`/telegram/webhook`, `/docs`, even a
+deliberately-wrong `/`) worked and logged normally. This is Google's own
+front-end infrastructure intercepting that specific path before Cloud
+Run's routing ever sees it — a known-if-obscure quirk, not a bug in the
+app. Fixed by renaming the route to `/ping`; nothing Telegram-facing
+depended on the old name.
+
+**Bug 2 — real end-to-end test found a genuine first bug**: sent a real
+notification by running a throwaway one-off Cloud Run Job (reusing the
+already-tested discovery image with a `--command`/`--args` override
+calling `notify_new_promotions` directly against one real stored
+promotion — kept the token server-side the whole time, never touched
+locally) — the message arrived with buttons, confirming the outbound half
+completely. Tapping Approve then failed: `getWebhookInfo` showed
+`"last_error_message":"Wrong response from the webhook: 403 Forbidden"`.
+Root cause: the setup instructions' own
+`openssl rand -hex 32 | gcloud secrets create ... --data-file=-` pipes
+`openssl`'s trailing newline straight into the stored secret, while
+Telegram's registered `secret_token` (submitted via a one-line `curl -d`)
+never has one — so the header Telegram sends back never matched what
+`webhook/app.py` compared it against. Fixed with `.strip()` on the
+configured value at comparison time (robust regardless of how the secret
+was created) and updated the README's setup instructions to use
+`printf '%s' "$(openssl rand -hex 32)"` for anyone re-provisioning.
+
+**Bug 3 — a real credential leak, caught by actually reading the logs
+rather than just checking the tap worked**: once the secret-token fix was
+redeployed and the user re-tapped Approve, the webhook logs showed the
+full sequence working — `Recorded approved for promotion ...` — but the
+very next lines were `httpx` request logs showing the complete
+`answerCallbackQuery`/`editMessageText` URLs **with the live bot token
+embedded in the path**, exactly as Telegram's Bot API places it. `httpx`
+logs full request URLs at INFO by default; `logging.basicConfig(level=
+INFO)` in `webhook/app.py`, `run_discovery.py`, and `loquax.py`'s
+`__main__` all enable that. This means the token had almost certainly
+already been logged on every prior test execution too, including the
+one-off notify test job. Fixed by setting `logging.getLogger("httpx")` to
+`WARNING` in all three entrypoints — none of them need per-request HTTP
+logging, each already logs its own meaningful summary line. **Advised the
+user to rotate the bot token regardless** (revoke via `@BotFather`,
+generate a new one) — a credential that was exposed, even briefly and even
+in a project only the user can view logs on, gets treated as compromised
+rather than assumed-fine because the leak is now fixed.
+
+**Final verification, for real**: user tapped Approve on the real
+Telegram message a second time (after both fixes deployed); webhook logs
+showed `200 OK` twice (Telegram's retry of the earlier failed delivery,
+plus the fresh tap), `Recorded approved for promotion a42438b30292 channel
+0ad87c1028e1`, and both `answerCallbackQuery`/`editMessageText` succeeding.
+Confirmed directly via `gcloud storage cat` on the real bucket — a genuine
+`EntryRecord` exists: `status: approved`, correct `channel_id`,
+`compliance_note: "No duplicate-entry or cross-brand conflict found."`.
+The full loop — discover → notify → tap → recorded — is real, live, and
+confirmed working end to end, not inferred from "the deploy succeeded."
+
+**Outstanding**: bot token rotation (user's action — @BotFather revoke +
+reissue), after which the new token needs writing into
+`telegram-bot-token` (`gcloud secrets versions add`) and both Cloud Run
+Job/Service will pick it up automatically on their next execution/request
+(`:latest` secret version reference, no redeploy needed for a new secret
+version — Cloud Run resolves `:latest` at request/execution time for
+Jobs, though the *Service* only re-resolves it for new container
+instances, so a stale warm instance could keep the old value briefly;
+worth a fresh revision if that matters sooner rather than later).
