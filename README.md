@@ -43,6 +43,9 @@ discovery adapter, all runnable locally today with **no GCP project required yet
 - `src/radiocomp/run_discovery.py` + `Dockerfile` — the scheduled-run
   entrypoint and its container image. This is what actually runs hourly on
   Cloud Run now — see the "live and scheduled" update below.
+- `src/radiocomp/notify/` + `src/radiocomp/webhook/` — the Telegram bot
+  (push notifications with Approve/Skip buttons, plus the Cloud Run
+  Service that receives the taps) — see the "Telegram bot" update below.
 - `tests/` — offline tests against saved real HTML fixtures, so they don't
   depend on any live site looking a particular way on any given day.
 
@@ -293,12 +296,69 @@ configured, same as every adapter — point it at `local`, `firestore`, or
 ```bash
 PYTHONPATH=src python -m radiocomp.view_promotions
 ```
-Still just a read-only list, not the Telegram approve/skip bot from spec
-section 6 — that needs an entry-execution engine (spec section 5) to
-actually gate, neither of which exist yet.
+Superseded by the Telegram bot below for anything you'd actually act on —
+`view_promotions.py` is still handy as a quick full-list check, but new
+promotions now push to you instead of needing to be pulled.
+
+## Update — the Telegram bot: notify + approve/skip
+
+The human-in-the-loop surface from spec section 6 is live: every newly
+discovered promotion gets pushed to you as a Telegram message (title,
+station, prize, deadline, entry channels with the same FREE/PAID/REVIEW
+flags, and a compliance-engine warning if it's a duplicate/already
+entered). When — and only when — a promotion has exactly one channel
+that's confidently free and doesn't need review, the message also gets
+**Approve**/**Skip** inline buttons; tapping one records your decision as
+an `EntryRecord` and edits the message to confirm it. Anything without a
+clearly safe channel (nothing extracted yet, or everything's paid/needs a
+look) sends as a plain notification instead — same "don't guess" posture
+as the rest of this codebase, just translated into "no button" instead of
+"no guess".
+
+**Scope, deliberately**: Approve only ever *records* a decision. It
+doesn't fill in or submit a real form — there's no entry-execution engine
+yet (spec section 5), and no `UserProfile` data collected. That's a
+distinct, bigger, future step; this one is "discover → notify → tap →
+recorded", fully real and fully working end to end.
+
+Architecture: `src/radiocomp/notify/` (outbound, plain `httpx` calls to
+the Telegram Bot API — no `python-telegram-bot`, no `parse_mode`/Markdown,
+see that package's docstrings for why) runs from both `run_discovery.py`
+(Cloud Run Job) and `loquax.py`'s own `__main__` (GitHub Actions).
+`src/radiocomp/webhook/` is a small FastAPI app, deployed as its own Cloud
+Run **Service** (`radio-comp-webhook`, `Dockerfile.webhook` — separate
+from the discovery Job's image, since the webhook needs FastAPI/uvicorn
+and the Job doesn't), that receives Telegram's button-tap callbacks. It's
+`--allow-unauthenticated` (Telegram's own servers can't do GCP IAM auth),
+protected instead by Telegram's `X-Telegram-Bot-Api-Secret-Token` header
+mechanism — see `webhook/app.py`'s docstring.
+
+Setting this up yourself (secrets shouldn't pass through an AI agent's
+tool calls):
+1. Create a bot via **@BotFather** on Telegram, get the token.
+2. Message it once, then `curl "https://api.telegram.org/bot<TOKEN>/getUpdates"`
+   to read back your chat ID.
+3. `printf '%s' "<token>" | gcloud secrets create telegram-bot-token --data-file=-`
+   and `openssl rand -hex 32 | gcloud secrets create telegram-webhook-secret --data-file=-`
+   (both `--configuration=radio-comp`).
+4. Add `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` as GitHub repository secrets
+   for the Loquax/GitHub Actions path.
+5. Once the webhook Service is deployed, register it yourself (needs the
+   raw token in the URL):
+   ```bash
+   curl -s "https://api.telegram.org/bot<TOKEN>/setWebhook" \
+     -d "url=<service-url>/telegram/webhook" \
+     -d "secret_token=<the telegram-webhook-secret value>" \
+     -d 'allowed_updates=["callback_query"]'
+   ```
+6. Don't call `getUpdates` again afterward — Telegram only delivers to one
+   mechanism at a time, and polling silently breaks webhook delivery.
+
+See docs/build-log.md for the full build/deploy trail.
 
 ## Next steps (not built yet)
 
-1. The Telegram bot (spec section 6) and entry-execution engine (spec
-   section 5) — the next real step up from "read-only list" toward
-   "approve an entry with one tap and the system submits it."
+1. The entry-execution engine (spec section 5) — a Playwright script that
+   actually fills and (once approved) submits a web-form entry, using
+   stored `UserProfile` data. The Telegram bot above already gets you to
+   "tap approve" — this is what would make that tap do something real.

@@ -1,0 +1,17 @@
+# Cloud Run Service image for the Telegram webhook receiver (webhook/app.py).
+# Separate from the discovery Job's Dockerfile deliberately — this never
+# scrapes a page and never touches Firestore, so no BeautifulSoup, no
+# google-cloud-firestore. It does need FastAPI/uvicorn to actually serve
+# HTTP, which the discovery Job never does.
+FROM python:3.13-slim
+WORKDIR /app
+COPY src/ src/
+RUN pip install --no-cache-dir \
+    pydantic>=2.7 \
+    httpx>=0.27 \
+    python-dotenv>=1.0 \
+    google-cloud-storage>=2.16 \
+    fastapi>=0.111 \
+    uvicorn>=0.30
+ENV PYTHONPATH=/app/src
+CMD ["uvicorn", "radiocomp.webhook.app:app", "--host", "0.0.0.0", "--port", "8080"]

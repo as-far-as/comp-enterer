@@ -50,4 +50,12 @@ jobs:
           GCP_PROJECT_ID: project-a6778446-201f-4aa5-a03
           GCS_BUCKET_NAME: project-a6778446-201f-4aa5-a03-data
           PYTHONPATH: src
+          # GitHub's own repo secrets, not GCP Secret Manager — this
+          # runtime already authenticates to GCP via WIF for storage, but
+          # routing the Telegram token through Secret Manager too would
+          # need a second IAM grant on the WIF service account for no real
+          # benefit at this scale. Deliberate inconsistency vs. the Cloud
+          # Run side (see docs/build-log.md).
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python -m radiocomp.aggregators.loquax

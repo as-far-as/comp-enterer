@@ -13,7 +13,9 @@ google-cloud-storage>=2.16  # gcs_json.py — used by Cloud Run Jobs, which can'
 # scratch, chromium included (`playwright install chromium`).
 playwright>=1.44
 
-# Phase 1 (dashboard + Telegram webhook):
-# fastapi>=0.111
-# uvicorn>=0.30
-# python-telegram-bot>=21.0
+# webhook/ (the Telegram callback receiver, Dockerfile.webhook) — for
+# local dev/testing. python-telegram-bot is deliberately not used: three
+# plain httpx calls (notify/telegram_client.py) don't need that library's
+# webhook/update-handling machinery, since FastAPI already provides that.
+fastapi>=0.111
+uvicorn>=0.30

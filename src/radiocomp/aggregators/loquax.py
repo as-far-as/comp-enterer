@@ -152,3 +152,10 @@ if __name__ == "__main__":
     for p in fresh:
         deadline_str = p.entry_deadline.isoformat() if p.entry_deadline else "unknown deadline"
         print(f"  - {p.title}  (closes {deadline_str})\n    {p.source_url}")
+
+    try:
+        from ..notify.send import notify_new_promotions
+
+        notify_new_promotions(fresh)
+    except Exception:
+        logger.exception("Notification step failed")

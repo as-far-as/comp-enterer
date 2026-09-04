@@ -43,6 +43,15 @@ GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "")
 GCP_REGION = os.environ.get("GCP_REGION", "europe-west2")
 GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", "")  # only used when STORAGE_BACKEND=gcs
 
+# Telegram bot — notify/ (outbound) and webhook/ (receives Approve/Skip
+# taps). TELEGRAM_WEBHOOK_SECRET is only read by webhook/app.py; it's not a
+# third-party credential, just random bytes you mint yourself for verifying
+# incoming requests actually came from Telegram (see webhook/app.py). All
+# three are optional — notify/send.py no-ops if the first two are unset.
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
+
 # Polite crawling defaults — see aggregators/loquax.py for why this matters.
 USER_AGENT = os.environ.get(
     "RADIOCOMP_USER_AGENT",

@@ -1,13 +1,15 @@
 """
-Unit tests for view_promotions.py's formatting logic — the storage-reading
-main() function is exercised live (local + real GCS, see docs/build-log.md)
-rather than here, same convention as the storage backends themselves.
+Unit tests for formatting.py's format_channel_line — shared by
+view_promotions.py's CLI output and notify/message.py's Telegram text.
+view_promotions.py's storage-reading main() is exercised live (local + real
+GCS, see docs/build-log.md) rather than here, same convention as the
+storage backends themselves.
 """
 
 from __future__ import annotations
 
+from radiocomp.formatting import format_channel_line as _format_channel
 from radiocomp.models import EntryChannel, EntryChannelType
-from radiocomp.view_promotions import _format_channel
 
 
 def _channel(**overrides) -> EntryChannel:

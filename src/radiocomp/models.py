@@ -120,6 +120,8 @@ class EntryRecord(BaseModel):
     id: str = Field(default_factory=_new_id)
     promotion_id: str
     channel_type: EntryChannelType
+    channel_id: Optional[str] = None  # the specific EntryChannel row, when known — a promotion can
+    # have more than one channel of the same channel_type, and channel_type alone can't tell them apart
     status: EntryStatus = EntryStatus.DRAFTED
     drafted_at: datetime = Field(default_factory=datetime.utcnow)
     approved_at: Optional[datetime] = None

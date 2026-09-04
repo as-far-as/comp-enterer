@@ -656,3 +656,98 @@ listed).
 Coverage is now fully automated across all four discovery adapters again,
 each from whichever network can actually reach it — no ongoing cost, no
 manual intervention, no laptop required for any of it.
+
+## 2026-09-04 — Telegram bot: notify + approve/skip, built and code-tested
+
+User asked to prioritise the human-in-the-loop surface (spec section 6)
+over expanding discovery coverage further, since 25+ promotions were
+already sitting undiscoverable-in-practice with no way to act on any of
+them. Initially scoped this down to notification-only (matching the
+existing `view_promotions.py` stopgap pattern) and entered plan mode to
+design it — the user corrected this mid-plan: they want the full
+interactive bot (Approve/Skip buttons, webhook receiver, Cloud Run
+Service), tested end-to-end for real, not another stopgap. Re-planned
+accordingly, with one scope question genuinely worth asking rather than
+assuming: does tapping Approve *record* a decision, or actually *submit*
+the entry? User chose record-only — the entry-execution engine (spec
+section 5, Playwright form-filling) stays a distinct future step, keeping
+the highest-risk part of this whole project (real automation touching
+external sites) out of this change while still delivering a complete,
+real, testable loop: discover → notify → tap → recorded.
+
+**Design, via a Plan subagent grounding every claim against the actual
+codebase and Telegram's own Bot API docs rather than assuming:**
+
+- `src/radiocomp/notify/` (outbound — `telegram_client.py`,
+  `callback_data.py`, `channel_selection.py`, `message.py`, `send.py`) vs.
+  `src/radiocomp/webhook/` (receiver — `app.py`, `handlers.py`), split
+  specifically so the existing lean discovery `Dockerfile` never needs
+  FastAPI. Plain `httpx` calls to Telegram's REST API, not
+  `python-telegram-bot` — that library's real value (webhook/update
+  routing) is redundant once FastAPI's already doing that job, and three
+  REST calls (`sendMessage`, `answerCallbackQuery`, `editMessageText`)
+  don't need a framework of their own.
+- **No `parse_mode` anywhere, ever** — scraped titles/prize text routinely
+  contains characters MarkdownV2 requires escaping (`. ! ( ) -` and more);
+  an unescaped send just 400s. Plain text throughout, permanently, not a
+  gap to "improve" later — the same reasoning `tandc.py` already
+  documented for why its own parsing stays shallow.
+- **Buttons only appear when there's something safe to approve**:
+  `channel_selection.select_approvable_channel()` picks the first
+  `EntryChannel` with `is_free_route is True and review_recommended is
+  False`, else `None` → plain notification, no buttons. Same "don't guess"
+  posture as every adapter's channel classification, just expressed as
+  "no button" instead of "no confident value".
+- `callback_data` format `f"{action}:{promotion_id}:{channel_id}"` — 27
+  bytes, comfortably under Telegram's 64-byte limit.
+- **Idempotency and a real, if minor, schema gap found while designing
+  it**: `EntryRecord` only stored `channel_type`, not which specific
+  `EntryChannel` — insufficient to dedupe two free channels of the same
+  type on the same promotion. Added `EntryRecord.channel_id: Optional[str]
+  = None` (small, backward-compatible) rather than carry the imprecision
+  forward.
+- **Compliance re-checked fresh at approval time**, not reused from
+  whatever was true when the notification was sent — hours can pass, and
+  another approval in the meantime could change the answer. The recorded
+  decision isn't blocked by a duplicate/already-entered finding (nothing
+  exists yet to actually enforce that), but the note is still attached to
+  the `EntryRecord` for visibility.
+- **Webhook security**: `--allow-unauthenticated` is required (Telegram's
+  servers can't do GCP IAM auth), so `webhook/app.py` checks the
+  `X-Telegram-Bot-Api-Secret-Token` header — Telegram's actual documented
+  mechanism for this (verified against Telegram's own docs during
+  planning, not assumed): `setWebhook`'s `secret_token` parameter gets
+  echoed back verbatim on every genuine call afterward.
+- **A gotcha confirmed via a real local test, not just read about**:
+  `editMessageText` leaves the *existing* inline keyboard in place if
+  `reply_markup` is omitted — it does not clear it. `handlers.py` always
+  passes `reply_markup={"inline_keyboard": []}` explicitly on the
+  post-decision edit; flagged in code comments as the single detail most
+  likely to regress into a bug if "simplified" later.
+
+**Built and verified locally** (no live Telegram token needed for this
+part): 73/73 tests passing (32 new — `test_channel_selection.py`,
+`test_callback_data.py`, `test_notify_message.py`, `test_notify_send.py`,
+`test_webhook_handlers.py`, plus `test_view_promotions.py` renamed to
+`test_formatting.py` after promoting its `_format_channel` helper to a
+shared, public `formatting.format_channel_line` used by both
+`view_promotions.py` and `notify/message.py`). Beyond unit tests, ran the
+actual FastAPI app via `TestClient` against real `LocalJsonRepository`
+instances: confirmed `/healthz`, confirmed the secret-token check rejects
+missing/wrong headers with 403, and confirmed a full realistic
+`callback_query` payload through the real HTTP route creates a genuine
+`EntryRecord` — the only thing that failed, expectedly, was the outbound
+Telegram API calls themselves (no real bot token configured yet locally),
+and `webhook/app.py` caught that and still returned 200 rather than
+crashing, exactly as designed.
+
+**Not yet done** (next: needs the user's own manual steps first — a bot
+token and two secrets can't pass through an AI agent's tool calls, per
+this session's established convention): creating the actual Telegram bot,
+provisioning `telegram-bot-token`/`telegram-webhook-secret` in Secret
+Manager, building/pushing `Dockerfile.webhook`, deploying the
+`radio-comp-webhook` Cloud Run Service, wiring secrets into it and into
+the existing `radio-comp-discovery` Job, adding the two GitHub repo
+secrets for the Loquax path, and registering the webhook with Telegram —
+then the actual live end-to-end test: a real message, a real tap, a real
+recorded decision.

@@ -13,14 +13,13 @@ instead from a separate scheduled GitHub Actions workflow
 writing into the same GCS bucket via Workload Identity Federation. See
 docs/build-log.md for the full investigation.
 
-Deliberately just discovery, nothing more: it fetches and stores
-Promotions/EntryChannels, same as running each adapter by hand. It doesn't
-run the compliance engine (spec section 4) or draft/submit anything — there's
-no entry-execution engine yet (spec section 5, not built) and no persisted
-place to put a compliance result even if there were. Run
-`python -m radiocomp.compliance.engine` — or just import and call
-check_promotion() — separately when you actually want that, against
-whatever's been discovered.
+Fetches and stores Promotions/EntryChannels, same as running each adapter
+by hand, then sends a Telegram notification for anything new
+(notify.send.notify_new_promotions — see that module for the compliance
+check and Approve/Skip button logic). Still doesn't draft or submit
+anything itself — there's no entry-execution engine yet (spec section 5,
+not built); Approve/Skip only ever records an EntryRecord, it never fills
+in or submits a real form.
 
 Station seeding (stations/seed_local_independent.py) also isn't run here —
 that's a one-off/occasional maintenance task, not something that needs
@@ -37,6 +36,9 @@ from __future__ import annotations
 
 import logging
 import sys
+
+from .models import Promotion
+from .notify.send import notify_new_promotions
 
 logger = logging.getLogger(__name__)
 
@@ -60,15 +62,17 @@ def main() -> int:
     adapters = _load_adapters()
     results: dict[str, int] = {}
     failures: list[str] = []
+    all_new_promotions: list[Promotion] = []
 
     for label, ingest in adapters:
         try:
             outcome = ingest()
             # talksport/radioexe return (promotions, channels); the
-            # aggregators return just promotions — count promotions either way.
-            new_count = len(outcome[0]) if isinstance(outcome, tuple) else len(outcome)
-            results[label] = new_count
-            logger.info("%s: %d new promotion(s)", label, new_count)
+            # aggregators return just promotions — either way, get the list.
+            new_promotions = outcome[0] if isinstance(outcome, tuple) else outcome
+            all_new_promotions.extend(new_promotions)
+            results[label] = len(new_promotions)
+            logger.info("%s: %d new promotion(s)", label, len(new_promotions))
         except Exception:
             failures.append(label)
             logger.exception("%s: ingest failed", label)
@@ -80,6 +84,13 @@ def main() -> int:
         len(failures),
         total_new,
     )
+
+    try:
+        notify_new_promotions(all_new_promotions)
+    except Exception:
+        # A Telegram outage isn't a discovery failure — never let this
+        # flip the exit code the scheduler watches.
+        logger.exception("Notification step failed")
 
     return 1 if len(failures) == len(adapters) else 0
 

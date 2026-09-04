@@ -18,21 +18,9 @@ Run it:
 from __future__ import annotations
 
 from radiocomp.compliance.engine import check_promotion
+from radiocomp.formatting import format_channel_line
 from radiocomp.models import EntryChannel, EntryRecord, Promotion
 from radiocomp.storage.base import get_repository
-
-
-def _format_channel(channel: EntryChannel) -> str:
-    if channel.review_recommended:
-        flag = "REVIEW"
-    elif channel.is_free_route:
-        flag = "FREE"
-    elif channel.is_free_route is False:
-        flag = "PAID"
-    else:
-        flag = "REVIEW"
-    cost = f" £{channel.cost_to_entrant_gbp:.2f}" if channel.cost_to_entrant_gbp else ""
-    return f"      [{flag}] {channel.channel_type.value}{cost}"
 
 
 def main() -> None:
@@ -61,7 +49,7 @@ def main() -> None:
 
         promo_channels = [c for c in channels if c.promotion_id == promo.id]
         for ch in promo_channels:
-            print(_format_channel(ch))
+            print(format_channel_line(ch))
         if not promo_channels:
             print("      (no entry channels recorded yet)")
 
