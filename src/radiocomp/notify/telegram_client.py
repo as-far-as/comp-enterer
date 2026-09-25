@@ -54,3 +54,40 @@ def edit_message_text(chat_id, message_id: int, text: str, reply_markup: Optiona
     # clear it. Always pass this, even as {"inline_keyboard": []}.
     payload["reply_markup"] = reply_markup if reply_markup is not None else {"inline_keyboard": []}
     return _call("editMessageText", payload)
+
+
+def edit_message_caption(chat_id, message_id: int, caption: str, reply_markup: Optional[dict] = None) -> dict:
+    """The photo-message counterpart to edit_message_text — editMessageText
+    400s against a message that was sent as a photo (draft confirmations,
+    see entry_execution/notify_draft.py); this is editMessageCaption
+    instead. Same "always pass reply_markup explicitly" rule applies."""
+    payload: dict = {"chat_id": chat_id, "message_id": message_id, "caption": caption}
+    payload["reply_markup"] = reply_markup if reply_markup is not None else {"inline_keyboard": []}
+    return _call("editMessageCaption", payload)
+
+
+def send_photo(chat_id: str, photo_bytes: bytes, caption: Optional[str] = None, reply_markup: Optional[dict] = None) -> dict:
+    """Multipart, not JSON — sendPhoto takes the image as a file upload.
+    Used for entry-execution draft/submission screenshots (see
+    entry_execution/notify_draft.py) — nothing else in this codebase sends
+    images yet."""
+    import json
+
+    url = _API_BASE.format(token=config.TELEGRAM_BOT_TOKEN, method="sendPhoto")
+    data: dict = {"chat_id": chat_id}
+    if caption is not None:
+        data["caption"] = caption
+    if reply_markup is not None:
+        data["reply_markup"] = json.dumps(reply_markup)
+
+    resp = httpx.post(
+        url,
+        data=data,
+        files={"photo": ("screenshot.png", photo_bytes, "image/png")},
+        timeout=config.REQUEST_TIMEOUT_SECONDS,
+    )
+    resp.raise_for_status()
+    result = resp.json()
+    if not result.get("ok"):
+        raise RuntimeError(f"Telegram API sendPhoto failed: {result}")
+    return result["result"]

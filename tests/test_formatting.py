@@ -41,3 +41,45 @@ def test_review_recommended_overrides_a_confident_classification():
     # review must win — never silently show FREE/PAID over a flagged channel.
     line = _format_channel(_channel(is_free_route=True, review_recommended=True))
     assert "[REVIEW]" in line
+
+
+def test_phone_entry_shows_the_actual_number_to_call():
+    # The real gap this closes: a genuinely free phone route was being
+    # stored (channel_url_or_number) but never shown, so the user only
+    # found one by clicking through and reading the source page themselves.
+    line = _format_channel(
+        _channel(
+            channel_type=EntryChannelType.PHONE_ENTRY,
+            is_free_route=True,
+            cost_to_entrant_gbp=0.0,
+            channel_url_or_number="0372 376 7519",
+        )
+    )
+    assert "0372 376 7519" in line
+
+
+def test_post_shows_the_actual_address():
+    line = _format_channel(
+        _channel(
+            channel_type=EntryChannelType.POST,
+            is_free_route=True,
+            channel_url_or_number="PO Box 8162, Derby, DE1 9GU",
+        )
+    )
+    assert "PO Box 8162, Derby, DE1 9GU" in line
+
+
+def test_web_form_does_not_show_channel_url_since_its_just_the_source_url_again():
+    line = _format_channel(
+        _channel(
+            channel_type=EntryChannelType.WEB_FORM,
+            is_free_route=True,
+            channel_url_or_number="https://example.com/campaign/FOO",
+        )
+    )
+    assert "https://example.com" not in line
+
+
+def test_missing_contact_info_shows_no_dash_placeholder():
+    line = _format_channel(_channel(channel_type=EntryChannelType.PHONE_ENTRY, is_free_route=None))
+    assert "—" not in line

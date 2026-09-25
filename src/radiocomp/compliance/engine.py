@@ -44,7 +44,25 @@ from ..models import EntryRecord, EntryStatus, Promotion
 # lower-cased station names sharing that network's cross-brand entry limit.
 SHARED_LIMIT_NETWORKS: dict[str, frozenset[str]] = {
     "Global": frozenset({"heart", "capital", "smooth", "smooth radio", "classic fm", "lbc", "radio x"}),
-    "Bauer": frozenset({"kiss", "absolute radio", "greatest hits radio"}),
+    "Bauer": frozenset(
+        {
+            "kiss",
+            "absolute radio",
+            "greatest hits radio",
+            # Added 2026-09-09 alongside the Make Me A Winner adapter —
+            # confirmed live (api.winhappy.com's own station carousel) as
+            # current Bauer stations sharing that platform's competitions,
+            # closing a gap this module's own docstring already flagged.
+            "magic",
+            "hits radio",
+            "planet rock",
+            # This adapter's own station_name_raw (see
+            # stations/bauer_makemeawinner.py) — needs to be a member
+            # here too, or its own promotions would never be recognised
+            # as Bauer-network by shared_network_for() at all.
+            "make me a winner (bauer)",
+        }
+    ),
 }
 
 # Entry states that represent an entry already made or in progress — FAILED

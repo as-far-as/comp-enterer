@@ -62,6 +62,19 @@ _PRIZE_RE = re.compile(r"£\s?([\d,]+(?:\.\d+)?)\s*(?:k\b)?", re.IGNORECASE)
 _DEADLINE_RE = re.compile(r"closes?\s+(?:at\s+[\d.:apm]*\s*)?on\s+(\d{1,2}\s+\w+\s+\d{4})", re.IGNORECASE)
 
 _ONLINE_COST_RE = re.compile(r"online entry costs?\s*£\s?([\d,]+(?:\.\d+)?)", re.IGNORECASE)
+_ONLINE_ENTRY_PRESENT_RE = re.compile(r"enter\s+(?:this\s+competition\s+)?online", re.IGNORECASE)
+# Presence-only signal for a web-form entry point with no cost phrase found —
+# added 2026-09-08 because the cost-phrase-only check above meant a
+# genuinely free web form produced NO channel at all (silent omission),
+# not an ambiguous one, unlike talksport.py's equivalent case. Derived from
+# the one real (paid) fixture on file ("You can enter this competition
+# online using the form above." + "A single online entry costs £2.50.") —
+# no real free-page fixture exists to validate this against yet. Fails
+# safe either way: if the phrasing on a genuinely free page differs, the
+# worst case is unchanged current behaviour (still silently drops the
+# channel), never a wrongly-confident classification. See
+# rendering.py's retry_ambiguous_web_form_channels for how this gets a
+# second chance to resolve via a rendered-page fetch.
 _SMS_KEYWORD_RE = re.compile(r"text\s+(?:the\s+word\s+)?['\"]?(\w+)['\"]?\s+to\s+(\d{4,7})", re.IGNORECASE)
 _SMS_COST_RE = re.compile(r"texts?\s+(?:are|cost)\s*£\s?([\d,]+(?:\.\d+)?)", re.IGNORECASE)
 _CALL_RE = re.compile(r"call\s+(0\d[\d\s]{6,})", re.IGNORECASE)
@@ -118,6 +131,7 @@ def _extract_channels(text: str) -> list[EntryChannel]:
     channels: list[EntryChannel] = []
 
     online_cost = _ONLINE_COST_RE.search(text)
+    online_present = _ONLINE_ENTRY_PRESENT_RE.search(text)
     if online_cost:
         cost = float(online_cost.group(1).replace(",", ""))
         channels.append(
@@ -128,6 +142,19 @@ def _extract_channels(text: str) -> list[EntryChannel]:
                 cost_to_entrant_gbp=cost,
                 review_recommended=False,
                 raw_excerpt=online_cost.group(0),
+            )
+        )
+    elif online_present:
+        # A web-form entry point exists but no cost phrase was found —
+        # mirrors talksport.py's "no price mentioned at all" pattern:
+        # plausibly free, not confidently classifiable from static text.
+        channels.append(
+            EntryChannel(
+                promotion_id="",
+                channel_type=EntryChannelType.WEB_FORM,
+                is_free_route=None,
+                review_recommended=True,
+                raw_excerpt=online_present.group(0),
             )
         )
 

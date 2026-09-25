@@ -1,0 +1,57 @@
+{
+  "tag": "HOLIDAYORCASH",
+  "title": "Win A Holiday Or \u00a35,000 Cash",
+  "body": "<p>TERMS</p>",
+  "summary": "<p>Summary</p>",
+  "postal_entry_code": null,
+  "telephone_entry": null,
+  "start_date": 1787439600000,
+  "end_date": 1792351200000,
+  "active_from": null,
+  "active_until": null,
+  "short_description": "Win a holiday or \u00a35,000 cash",
+  "how_to_play": "<p>..</p>",
+  "limit_type": "COMPETITION",
+  "entry_limit": 0,
+  "keyword": "WEB_HOLIDAYORCASH_WINHAPPY",
+  "shortcode": "10000",
+  "type": "EXTERNAL",
+  "global_limit": null,
+  "week_offset": 0,
+  "redirect_tag": null,
+  "redirect_url": "https://makemeawinner.co.uk/dream-holiday",
+  "primary_color": null,
+  "secondary_color": null,
+  "app_exclusive": false,
+  "web_exclusive": false,
+  "promo_caption": null,
+  "multiweek": false,
+  "asset_nav_mode": "ARROWS",
+  "value": null,
+  "assets": [
+    {
+      "id": "2388",
+      "alt": "Win a holiday or \u00a35,000 cash",
+      "time": 1785250063,
+      "href": "",
+      "sub_site_id": null,
+      "sub_site_brand": null
+    }
+  ],
+  "promo_assets": [],
+  "basket_switch_offers": [],
+  "sponsored_opt_in": null,
+  "meta": {
+    "title": "Win a holiday or \u00a35,000 cash - ENDS 18 OCT",
+    "description": "",
+    "keywords": ""
+  },
+  "open_graph": {
+    "title": "Win a holiday or \u00a35,000 cash - ENDS 18 OCT",
+    "description": "We are giving you the chance to win a holiday or \u00a35,000 cash. Enter online from just \u00a32.00. Find out more on how to enter."
+  },
+  "global_count": null,
+  "raffle": null,
+  "skill_game": null,
+  "server_time": 1788961534907
+}

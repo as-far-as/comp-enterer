@@ -1,0 +1,16 @@
+# gcloud builds submit --config cloudbuild.entry-execution.yaml .
+# Needed because `gcloud builds submit --tag <image> .` only auto-detects a
+# file literally named "Dockerfile" — this repo now has three.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      [
+        "build",
+        "-f",
+        "Dockerfile.entry-execution",
+        "-t",
+        "europe-west2-docker.pkg.dev/project-a6778446-201f-4aa5-a03/radio-comp/entry-execution:latest",
+        ".",
+      ]
+images:
+  - "europe-west2-docker.pkg.dev/project-a6778446-201f-4aa5-a03/radio-comp/entry-execution:latest"

@@ -1,0 +1,36 @@
+# Cloud Run Job image for the scheduled entry-execution pass
+# (run_entry_execution.py). Based on Microsoft's own Playwright image,
+# deliberately, rather than hand-installing Chromium + its system
+# dependencies onto python:3.13-slim like the other two Dockerfiles here —
+# this image bakes in the Chromium binary and all its system dependencies
+# for the version in the tag below (confirmed live via a Cloud Build probe,
+# 2026-09-07: the `playwright` pip *package* itself is NOT preinstalled in
+# this tag, despite an initial reading of the Playwright docs suggesting
+# otherwise — only the browser + its OS deps are baked in). So the
+# `playwright==` pin below is still installed explicitly via pip, same as
+# any other dependency — it's fast (no browser download, since Chromium is
+# already on disk) — but it MUST be kept equal to the image tag's version
+# or Playwright can't find the pre-baked browser executable at all. See
+# https://playwright.dev/python/docs/docker.
+#
+# Only google-cloud-storage, not google-cloud-firestore, for the same
+# reason as the discovery Job's Dockerfile: Cloud Run can't reach
+# Firestore here at all (see storage/gcs_json.py's docstring) — this Job
+# also runs with STORAGE_BACKEND=gcs. Needs the google-genai SDK for the
+# one LLM call this feature makes (entry_execution/llm_mapping.py, Gemini
+# rather than Claude — switched 2026-09-08 so this isn't tied to a work
+# Anthropic account) — no other image needs it. Keep this list in sync
+# with what entry_execution/ and outcomes/ actually import, not with the
+# full dev requirements.txt.
+FROM mcr.microsoft.com/playwright/python:v1.62.0-noble
+WORKDIR /app
+COPY src/ src/
+RUN pip install --no-cache-dir \
+    pydantic>=2.7 \
+    httpx>=0.27 \
+    python-dotenv>=1.0 \
+    google-cloud-storage>=2.16 \
+    google-genai>=2.22.0 \
+    playwright==1.62.0
+ENV PYTHONPATH=/app/src
+CMD ["python", "-m", "radiocomp.run_entry_execution"]

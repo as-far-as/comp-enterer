@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from radiocomp.models import EntryChannelType
-from radiocomp.stations.radioexe import parse_detail, parse_listing
+from radiocomp.stations.radioexe import _extract_channels, parse_detail, parse_listing
 
 FIXTURES = Path(__file__).parent / "fixtures"
 LISTING = FIXTURES / "radioexe_win_listing.html"
@@ -74,6 +74,32 @@ def test_whatsapp_and_email_channels_are_captured_and_flagged_for_review():
     assert email.channel_url_or_number == "studio@radioexe.co.uk"
     assert email.is_free_route is None
     assert email.review_recommended is True
+
+
+def test_web_form_with_no_cost_phrase_is_flagged_ambiguous_not_silently_dropped():
+    # Synthetic, not fixture-derived — no real free-web-form Radio Exe page
+    # is on file (only the paid "Make Me A Winner!" example exists). Before
+    # 2026-09-08, a page like this produced NO web_form channel at all
+    # (silent omission); it should now come back ambiguous instead, giving
+    # rendering.py's Playwright retry a real chance to resolve it.
+    text = "You can enter this competition online using the form above. Good luck!"
+    channels = _extract_channels(text)
+
+    by_type = {c.channel_type: c for c in channels}
+    assert EntryChannelType.WEB_FORM in by_type
+    web = by_type[EntryChannelType.WEB_FORM]
+    assert web.is_free_route is None
+    assert web.review_recommended is True
+
+
+def test_web_form_with_cost_phrase_still_takes_priority_over_presence_only():
+    text = "You can enter this competition online using the form above. A single online entry costs £2.50."
+    channels = _extract_channels(text)
+
+    web = next(c for c in channels if c.channel_type == EntryChannelType.WEB_FORM)
+    assert web.is_free_route is False
+    assert web.cost_to_entrant_gbp == 2.50
+    assert web.review_recommended is False
 
 
 def test_no_fixed_deadline_stays_none_rather_than_guessed():

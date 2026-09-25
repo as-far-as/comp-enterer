@@ -20,7 +20,13 @@ def _promo(**overrides) -> Promotion:
 
 
 def _channel(**overrides) -> EntryChannel:
-    defaults = dict(promotion_id="p1", channel_type=EntryChannelType.WEB_FORM)
+    # POST by default, not WEB_FORM — WEB_FORM is excluded by
+    # select_approvable_channel (entry_execution/ handles it instead), so
+    # build_notification() tests need a channel type that can actually
+    # qualify. build_reply_markup() itself is channel-type-agnostic (the
+    # exclusion lives one level up), so tests calling it directly are
+    # unaffected either way.
+    defaults = dict(promotion_id="p1", channel_type=EntryChannelType.POST)
     defaults.update(overrides)
     return EntryChannel(**defaults)
 

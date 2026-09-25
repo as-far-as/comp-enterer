@@ -7,11 +7,15 @@ google-cloud-firestore>=2.16
 google-cloud-storage>=2.16  # gcs_json.py — used by Cloud Run Jobs, which can't reach Firestore here (see config.py)
 
 # Installed for the direct-station-monitor search on 2026-09-02 (see
-# docs/build-log.md) — not currently used by any adapter (talksport.py and
-# radioexe.py both turned out fine with plain httpx), but the next
-# genuinely JS-required station shouldn't need this re-installed from
-# scratch, chromium included (`playwright install chromium`).
-playwright>=1.44
+# docs/build-log.md) — not currently used by any station adapter
+# (talksport.py and radioexe.py both turned out fine with plain httpx),
+# but entry_execution/browser.py does need it now. Pinned to an exact
+# version, not >=, because Dockerfile.entry-execution's base image tag
+# (mcr.microsoft.com/playwright/python:vX.Y.Z-noble) must match this
+# exactly — a mismatch means Playwright can't find its browser executable
+# at all. Bump both together (`playwright install chromium` locally after
+# bumping here).
+playwright==1.62.0
 
 # webhook/ (the Telegram callback receiver, Dockerfile.webhook) — for
 # local dev/testing. python-telegram-bot is deliberately not used: three
@@ -19,3 +23,11 @@ playwright>=1.44
 # webhook/update-handling machinery, since FastAPI already provides that.
 fastapi>=0.111
 uvicorn>=0.30
+
+# entry_execution/llm_mapping.py — the one LLM call in this codebase
+# (generic form-field mapping, never sees PII). Gemini rather than Claude,
+# deliberately: the user didn't want this tied to a work Anthropic
+# account, and Gemini's free tier (a personal Google account, no billing)
+# fits how rarely this actually runs (2026-09-08). Reads GEMINI_API_KEY
+# from the environment itself; no config.py plumbing needed.
+google-genai>=2.22.0

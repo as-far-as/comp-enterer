@@ -34,3 +34,9 @@ def test_unknown_action_raises_on_build():
 )
 def test_malformed_input_returns_none_not_raises(malformed):
     assert parse_callback_data(malformed) is None
+
+
+@pytest.mark.parametrize("action", ["w", "l"])
+def test_outcome_actions_round_trip(action):
+    data = build_callback_data(action, "promoid123456", "entryid123456")
+    assert parse_callback_data(data) == (action, "promoid123456", "entryid123456")

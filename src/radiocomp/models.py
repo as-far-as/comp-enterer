@@ -128,6 +128,19 @@ class EntryRecord(BaseModel):
     submitted_at: Optional[datetime] = None
     compliance_note: Optional[str] = None  # which T&C clause/limit check cleared this entry
 
+    # WEB_FORM two-stage flow only (entry_execution/) — see that package's
+    # docstrings. Every other channel_type goes straight to APPROVED/SKIPPED
+    # and never touches these.
+    fill_plan: Optional[dict] = None  # the validated field mapping (selectors + classifications, never
+    # literal PII values) saved at draft time and replayed unchanged at submit time — see
+    # entry_execution/fill_plan.py. Literal values are re-derived from whatever UserProfile is
+    # currently stored, not frozen here, since the mapping (not the values) is what needs to survive
+    # unchanged between the two approval stages.
+    draft_screenshot_path: Optional[str] = None  # e.g. "entry_screenshots/<id>_draft.png"
+    submitted_screenshot_path: Optional[str] = None  # e.g. "entry_screenshots/<id>_submitted.png"
+    submission_error: Optional[str] = None  # human-readable reason for a FAILED status — distinct
+    # from compliance_note, which is about eligibility, not execution
+
 
 class Outcome(BaseModel):
     id: str = Field(default_factory=_new_id)

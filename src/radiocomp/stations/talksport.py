@@ -47,6 +47,7 @@ from .. import config
 from ..models import DiscoveredVia, EntryChannel, EntryChannelType, Promotion
 from ..storage.base import get_repository
 from ..dedup import promotion_dedup_hash
+from . import talksport_widget
 
 logger = logging.getLogger(__name__)
 
@@ -295,6 +296,15 @@ def ingest(max_detail_pages: int = 10) -> tuple[list[Promotion], list[EntryChann
             continue
         if promo.dedup_hash in seen_this_run or promo.dedup_hash in existing_hashes:
             continue
+        # Only spend a browser launch resolving the "Online" widget for a
+        # promotion we're actually about to store — an already-known
+        # duplicate isn't worth the extra latency/cost.
+        channels = [
+            talksport_widget.resolve_online_channel(url, ch)
+            if ch.channel_type == EntryChannelType.WEB_FORM and ch.is_free_route is None and ch.review_recommended
+            else ch
+            for ch in channels
+        ]
         seen_this_run.add(promo.dedup_hash)
 
         promo_repo.add(promo)

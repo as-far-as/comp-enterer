@@ -21,9 +21,16 @@ anything itself — there's no entry-execution engine yet (spec section 5,
 not built); Approve/Skip only ever records an EntryRecord, it never fills
 in or submits a real form.
 
-Station seeding (stations/seed_local_independent.py) also isn't run here —
-that's a one-off/occasional maintenance task, not something that needs
-repeating every scheduled pass.
+Station seeding (stations/seed_local_independent.py,
+stations/seed_southeast_london.py) also isn't run here — that's a
+one-off/occasional maintenance task, not something that needs repeating
+every scheduled pass.
+
+Also runs stations/watch_for_competitions.py's lightweight watcher (see
+that module's docstring) against the seed_southeast_london.py stations —
+4 plain HTTP GETs, negligible added cost, folded in here rather than a
+new scheduled Job, same reasoning outcomes/reminder.py already used for
+its own end-of-run check.
 
 Every adapter's errors are caught and logged rather than allowed to take
 the whole run down — one station's page changing shape shouldn't block the
@@ -49,12 +56,15 @@ def _load_adapters() -> list[tuple[str, object]]:
     not a module-level global appended to, so calling this more than once
     (e.g. from a test) can't duplicate entries."""
     from .aggregators import theprizefinder
-    from .stations import radioexe, talksport
+    from .stations import bauer_makemeawinner, heart_global, radioexe, talksport, wayin
 
     return [
         ("theprizefinder", theprizefinder.ingest),
         ("talksport", talksport.ingest),
         ("radioexe", radioexe.ingest),
+        ("bauer_makemeawinner", bauer_makemeawinner.ingest),
+        ("wayin", wayin.ingest),
+        ("heart_global", heart_global.ingest),
     ]
 
 
@@ -91,6 +101,14 @@ def main() -> int:
         # A Telegram outage isn't a discovery failure — never let this
         # flip the exit code the scheduler watches.
         logger.exception("Notification step failed")
+
+    try:
+        from .stations import watch_for_competitions
+        from .stations.seed_southeast_london import STATIONS as SE_LONDON_STATIONS
+
+        watch_for_competitions.run(SE_LONDON_STATIONS)
+    except Exception:
+        logger.exception("Competition watcher step failed")
 
     return 1 if len(failures) == len(adapters) else 0
 
