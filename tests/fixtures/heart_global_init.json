@@ -1,0 +1,1749 @@
+{
+  "brands": {
+    "rivieraradio": {
+      "id": 100,
+      "brandName": "Riviera Radio",
+      "brandCode": "rivieraradio",
+      "meta": {
+        "link": "https://rivieraradio.mc/",
+        "optInSMS": "",
+        "optInLabel": "",
+        "optInLinkTerms": "",
+        "optInLinkPrivacy": ""
+      },
+      "brandRegion": "world"
+    },
+    "bigtop40": {
+      "id": 68,
+      "brandName": "Big Top 40",
+      "brandCode": "bigtop40",
+      "meta": {
+        "link": "https://www.bigtop40.com/",
+        "optInSMS": "",
+        "optInLabel": "",
+        "optInLinkTerms": "",
+        "optInLinkPrivacy": "https://global.com/legal/privacy-policy/"
+      },
+      "brandRegion": "uk"
+    },
+    "globalplayer": {
+      "id": 67,
+      "brandName": "Global Player",
+      "brandCode": "globalplayer",
+      "meta": {
+        "link": "https://www.globalplayer.com/",
+        "optInSMS": "",
+        "optInLabel": "<p>I would like to join Global Player's Text Club for exclusive competitions &amp; relevant offers and services by SMS and agree to its [TERMS_URL] and [PRIVACY_URL].</p>",
+        "optInLinkTerms": "https://global.com/legal/premium-rate-text-interactive-services/",
+        "optInLinkPrivacy": "https://global.com/legal/privacy-policy/"
+      },
+      "brandRegion": "uk"
+    },
+    "winplus": {
+      "id": 9,
+      "brandName": "Win Plus",
+      "brandCode": "winplus",
+      "meta": {
+        "link": "https://www.winplus.co.uk/",
+        "optInSMS": "<p>I would like to receive text alerts with new Global WIN competitions when they go live. [PRIVACY_URL].</p>",
+        "optInLabel": "",
+        "optInLinkTerms": "https://global.com/legal/premium-rate-text-interactive-services/",
+        "optInLinkPrivacy": "https://global.com/privacy-policy/"
+      },
+      "brandRegion": "uk"
+    },
+    "goldradio": {
+      "id": 8,
+      "brandName": "Gold Radio",
+      "brandCode": "goldradio",
+      "meta": {
+        "link": "https://www.goldradio.com/",
+        "optInSMS": "<p>I would like to receive text alerts with new Global WIN competitions when they go live. [PRIVACY_URL].</p>",
+        "optInLabel": "",
+        "optInLinkTerms": "",
+        "optInLinkPrivacy": "https://global.com/privacy-policy/"
+      },
+      "brandRegion": "uk"
+    },
+    "lbc": {
+      "id": 7,
+      "brandName": "LBC",
+      "brandCode": "lbc",
+      "meta": {
+        "link": "https://www.lbc.co.uk/",
+        "optInSMS": "<p>I would like to receive text alerts with new Global WIN competitions when they go live. [PRIVACY_URL].</p>",
+        "optInLabel": "",
+        "optInLinkTerms": "",
+        "optInLinkPrivacy": "https://global.com/privacy-policy/"
+      },
+      "brandRegion": "uk"
+    },
+    "radiox": {
+      "id": 6,
+      "brandName": "Radio X",
+      "brandCode": "radiox",
+      "meta": {
+        "link": "https://www.radiox.co.uk/",
+        "optInSMS": "<p>I would like to receive text alerts with new Global WIN competitions when they go live. [PRIVACY_URL].</p>",
+        "optInLabel": "<p>I would like to join Radio X's Text Club for exclusive competitions &amp; relevant offers and services by SMS and agree to its [TERMS_URL] and [PRIVACY_URL].</p>",
+        "optInLinkTerms": "https://www.radiox.co.uk/premium-rate-phone-and-text/",
+        "optInLinkPrivacy": "https://global.com/privacy-policy/"
+      },
+      "brandRegion": "uk"
+    },
+    "capitalxtra": {
+      "id": 5,
+      "brandName": "Capital Xtra",
+      "brandCode": "capitalxtra",
+      "meta": {
+        "link": "https://www.capitalxtra.com/",
+        "optInSMS": "<p>I would like to receive text alerts with new Global WIN competitions when they go live. [PRIVACY_URL].</p>",
+        "optInLabel": "",
+        "optInLinkTerms": "",
+        "optInLinkPrivacy": "https://global.com/privacy-policy/"
+      },
+      "brandRegion": "uk"
+    },
+    "classicfm": {
+      "id": 4,
+      "brandName": "Classic FM",
+      "brandCode": "classicfm",
+      "meta": {
+        "link": "https://www.classicfm.com/",
+        "optInSMS": "<p>I would like to receive text alerts with new Global WIN competitions when they go live. [PRIVACY_URL].</p>",
+        "optInLabel": "<p>I would like to join Classic FM's Text Club for exclusive competitions &amp; relevant offers and services by SMS and agree to its [TERMS_URL] and [PRIVACY_URL].</p>",
+        "optInLinkTerms": "https://www.classicfm.com/faq/premium-rate-phone-and-text-classic-fm/",
+        "optInLinkPrivacy": "https://global.com/privacy-policy/"
+      },
+      "brandRegion": "uk"
+    },
+    "smoothradio": {
+      "id": 3,
+      "brandName": "Smooth",
+      "brandCode": "smoothradio",
+      "meta": {
+        "link": "https://www.smoothradio.com/",
+        "optInSMS": "<p>I would like to receive text alerts with new Global WIN competitions when they go live. [PRIVACY_URL].</p>",
+        "optInLabel": "<p>I would like to join Smooth's Text Club for exclusive competitions &amp; relevant offers and services by SMS and agree to its [TERMS_URL] and [PRIVACY_URL].</p>",
+        "optInLinkTerms": "https://www.smoothradio.com/terms-conditions/premium-rate/",
+        "optInLinkPrivacy": "https://global.com/privacy-policy/"
+      },
+      "brandRegion": "uk"
+    },
+    "heart": {
+      "id": 2,
+      "brandName": "Heart",
+      "brandCode": "heart",
+      "meta": {
+        "link": "https://www.heart.co.uk/",
+        "optInSMS": "<p>I would like to receive text alerts with new Global WIN competitions when they go live. [PRIVACY_URL].</p>",
+        "optInLabel": "<p>I would like to join Heart's Text Club for exclusive competitions &amp; relevant offers and services by SMS and agree to its [TERMS_URL] and [PRIVACY_URL].</p>",
+        "optInLinkTerms": "https://www.heart.co.uk/terms-conditions/premium-rate-phone-and-text/",
+        "optInLinkPrivacy": "https://global.com/privacy-policy/"
+      },
+      "brandRegion": "uk"
+    },
+    "capitalfm": {
+      "id": 1,
+      "brandName": "Capital FM",
+      "brandCode": "capitalfm",
+      "meta": {
+        "link": "https://www.capitalfm.com/",
+        "optInSMS": "<p>I would like to receive text alerts with new Global WIN competitions when they go live. [PRIVACY_URL].</p>",
+        "optInLabel": "<p>I would like to join Capital's Text Club for exclusive competitions &amp; relevant offers and services by SMS and agree to its [TERMS_URL] and [PRIVACY_URL].</p>",
+        "optInLinkTerms": "https://www.capitalfm.com/faq/premium-rate-phone-and-text-capital-fm/",
+        "optInLinkPrivacy": "https://global.com/privacy-policy/"
+      },
+      "brandRegion": "uk"
+    }
+  },
+  "settings": {
+    "crossSellTitle": "We think you may like this",
+    "crossSellBody": "<p>Increase your chances of winning with these special offers that give you discounted entries!</p>",
+    "crossSellDisclaimer": "",
+    "monthlyCapping": 240
+  },
+  "content": [
+    {
+      "contentId": 1750,
+      "contentName": "Cash Call (August) - £500k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0,
+          "5": 0,
+          "6": 0,
+          "7": 0,
+          "8": 0,
+          "9": 0,
+          "67": 0,
+          "68": 0
+        },
+        "winnerText": "Paul won £500,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerVideo": {
+          "alt": "Cash Call £500k",
+          "type": "video",
+          "title": "Cash Call £500k",
+          "width": 0,
+          "height": 0,
+          "source": "6403591865112"
+        },
+        "winnerPicture": {
+          "alt": "Kate gives away £500k",
+          "type": "image",
+          "title": "Kate gives away £500k",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260817/20260817-153857-007-JNg3myBc.png"
+        },
+        "winnerDateStop": "2026-12-31T00:00:00.000+00:00",
+        "winnerDateStart": "2026-08-17T16:23:00.000+01:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-08-17T15:39:10.228Z",
+      "updatedBy": 265,
+      "updatedAt": "2026-08-17T15:39:10.228Z"
+    },
+    {
+      "contentId": 1717,
+      "contentName": "Cash Call (July) - £1mil",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 1,
+          "2": 1,
+          "3": 1,
+          "4": 1,
+          "5": 1,
+          "6": 1,
+          "7": 1,
+          "8": 1,
+          "9": 1,
+          "67": 1,
+          "68": 1
+        },
+        "winnerText": "Lucy won £1 million with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerVideo": {
+          "alt": "Million Pound Cash Call",
+          "type": "video",
+          "title": "Million Pound Cash Call",
+          "width": 0,
+          "height": 0,
+          "source": "6402576583112"
+        },
+        "winnerPicture": {
+          "alt": "Lucy £1million",
+          "type": "image",
+          "title": "Lucy £1million",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260803/20260803-121130-205-e9QdhR1A.png"
+        },
+        "winnerDateStop": "2026-12-31T00:00:00.000+00:00",
+        "winnerDateStart": "2026-08-03T13:10:00.000+01:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-08-03T12:11:47.688Z",
+      "updatedBy": 265,
+      "updatedAt": "2026-09-17T09:59:59.114Z"
+    },
+    {
+      "contentId": 1684,
+      "contentName": "Cash Call (July) - £900K",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 2,
+          "2": 2,
+          "3": 2,
+          "4": 2,
+          "5": 2,
+          "6": 2,
+          "7": 2,
+          "8": 2,
+          "9": 2,
+          "67": 2,
+          "68": 2
+        },
+        "winnerText": "Andrew won £900,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerVideo": null,
+        "winnerPicture": {
+          "alt": "Andrew - £900k",
+          "type": "image",
+          "title": "Andrew - £900k",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260727/20260727-143451-976-9nK9yrwf.jpeg"
+        },
+        "winnerDateStop": "2026-12-31T00:00:00.000+00:00",
+        "winnerDateStart": "2026-07-27T15:32:00.000+01:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-07-27T14:35:16.800Z",
+      "updatedBy": 265,
+      "updatedAt": "2026-07-27T14:35:16.800Z"
+    },
+    {
+      "contentId": 1652,
+      "contentName": "Cash Call (July) - £750K",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 3,
+          "2": 3,
+          "3": 3,
+          "4": 3,
+          "5": 3,
+          "6": 3,
+          "7": 3,
+          "8": 3,
+          "9": 3,
+          "67": 3,
+          "68": 3
+        },
+        "winnerText": "Sandra won £750,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerVideo": null,
+        "winnerPicture": {
+          "alt": "sandra £750k",
+          "type": "image",
+          "title": "sandra £750k",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260721/20260721-145641-173-CBqPcdHn.jpeg"
+        },
+        "winnerDateStop": "2026-12-31T00:00:00.000+00:00",
+        "winnerDateStart": "2026-07-21T15:55:00.000+01:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-07-21T14:57:10.936Z",
+      "updatedBy": 265,
+      "updatedAt": "2026-07-21T14:57:10.936Z"
+    },
+    {
+      "contentId": 1651,
+      "contentName": "Cash Call (July) - £600K",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 4,
+          "2": 4,
+          "3": 4,
+          "4": 4,
+          "5": 4,
+          "6": 4,
+          "7": 4,
+          "8": 4,
+          "9": 4,
+          "67": 4,
+          "68": 4
+        },
+        "winnerText": "Wendy won £600,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerVideo": {
+          "alt": "Wendy wins £600k",
+          "type": "video",
+          "title": "Wendy wins £600k",
+          "width": 0,
+          "height": 0,
+          "source": "6401121054112"
+        },
+        "winnerPicture": {
+          "alt": "wendy £600k",
+          "type": "image",
+          "title": "wendy £600k",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260721/20260721-145500-135-sHUYm9nf.jpeg"
+        },
+        "winnerDateStop": "2026-12-31T00:00:00.000+00:00",
+        "winnerDateStart": "2026-07-21T15:54:00.000+01:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-07-21T14:55:22.218Z",
+      "updatedBy": 265,
+      "updatedAt": "2026-08-17T15:57:06.350Z"
+    },
+    {
+      "contentId": 1618,
+      "contentName": "Cash Call (July) - £500K",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 5,
+          "2": 5,
+          "3": 5,
+          "4": 5,
+          "5": 5,
+          "6": 5,
+          "7": 5,
+          "8": 5,
+          "9": 5,
+          "67": 5,
+          "68": 5
+        },
+        "winnerText": "Holly won £500,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £500,000 WITH CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>HOLLY</strong></i></span></p>",
+        "winnerVideo": {
+          "alt": "Holly ",
+          "type": "video",
+          "title": "Holly ",
+          "width": 0,
+          "height": 0,
+          "source": "6401119775112"
+        },
+        "winnerPicture": {
+          "alt": "Holly won £500,00 with Cash Call",
+          "type": "image",
+          "title": "Holly won £500,00 with Cash Call",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-105955-818-eGuMwaPY.jpeg"
+        },
+        "winnerDateStop": "2026-12-31T00:00:00.000+00:00",
+        "winnerDateStart": "2026-07-06T10:25:00.000+01:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-07-06T09:27:48.319Z",
+      "updatedBy": 265,
+      "updatedAt": "2026-08-17T11:40:21.811Z"
+    },
+    {
+      "contentId": 1585,
+      "contentName": "Cash Call (June) - £400K",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 6,
+          "2": 6,
+          "3": 6,
+          "4": 6,
+          "5": 6,
+          "6": 6,
+          "7": 6,
+          "8": 6,
+          "9": 6,
+          "67": 6,
+          "68": 6
+        },
+        "winnerText": "Hannah won £400,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £400,000 WITH CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>HANNAH</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "Cash Call winner - Hannah 400k",
+          "type": "image",
+          "title": "Cash Call winner - Hannah 400k",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-091030-644-9gDTzYIh.jpeg"
+        },
+        "winnerDateStop": "2026-10-31T00:00:00.000+00:00",
+        "winnerDateStart": "2026-06-29T10:39:00.000+01:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-06-29T09:40:18.425Z",
+      "updatedBy": 167,
+      "updatedAt": "2026-08-05T08:25:00.753Z"
+    },
+    {
+      "contentId": 1552,
+      "contentName": "Cash Call (June) - £300k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 7,
+          "2": 7,
+          "3": 7,
+          "4": 7,
+          "5": 7,
+          "6": 7,
+          "7": 7,
+          "8": 7,
+          "9": 7,
+          "67": 7,
+          "68": 7
+        },
+        "winnerText": "Andrew won £300,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £300,000 WITH CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>ANDREW</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "Andrew - £300k",
+          "type": "image",
+          "title": "Andrew - £300k",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-090953-824-OkY9wSNN.jpeg"
+        },
+        "winnerDateStop": "2026-10-31T00:00:00.000+00:00",
+        "winnerDateStart": "2026-06-15T12:59:00.000+01:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-06-15T12:00:15.072Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:11:25.305Z"
+    },
+    {
+      "contentId": 1519,
+      "contentName": "Cash Call (June) - £250k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 8,
+          "2": 8,
+          "3": 8,
+          "4": 8,
+          "5": 8,
+          "6": 8,
+          "7": 8,
+          "8": 8,
+          "9": 8,
+          "67": 8,
+          "68": 8
+        },
+        "winnerText": "Michael won £250,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £250,000 WITH CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>MICHAEL</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "Michael £250k",
+          "type": "image",
+          "title": "Michael £250k",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-091108-145-2o1wPuWq.jpeg"
+        },
+        "winnerDateStop": "2026-10-31T00:00:00.000+00:00",
+        "winnerDateStart": "2026-06-10T17:06:00.000+01:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-06-10T16:07:35.696Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:12:49.489Z"
+    },
+    {
+      "contentId": 1486,
+      "contentName": "Cash Call (May) - £900k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 9,
+          "2": 9,
+          "3": 9,
+          "4": 9,
+          "5": 9,
+          "6": 9,
+          "7": 9,
+          "8": 9,
+          "9": 9,
+          "67": 9,
+          "68": 9
+        },
+        "winnerText": "Paul won £900,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £900,000 WITH CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>PAUL</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "Paul £900k",
+          "type": "image",
+          "title": "Paul £900k",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-091148-285-9yw2ArQ1.jpeg"
+        },
+        "winnerDateStop": "2026-10-31T00:00:00.000+00:00",
+        "winnerDateStart": "2026-05-27T15:33:00.000+01:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-05-27T14:34:14.303Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:13:26.228Z"
+    },
+    {
+      "contentId": 1453,
+      "contentName": "Cash Call (May) - £800k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 10,
+          "2": 10,
+          "3": 10,
+          "4": 10,
+          "5": 10,
+          "6": 10,
+          "7": 10,
+          "8": 10,
+          "9": 10,
+          "67": 10,
+          "68": 10
+        },
+        "winnerText": "Yve won £800,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £800,000 WITH CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>YVE</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "Yve £800k",
+          "type": "image",
+          "title": "Yve £800k",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-091245-908-INlBuS71.jpeg"
+        },
+        "winnerDateStop": "2026-09-30T00:00:00.000+01:00",
+        "winnerDateStart": "2026-05-20T16:13:00.000+01:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-05-20T15:14:27.258Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:14:02.121Z"
+    },
+    {
+      "contentId": 1420,
+      "contentName": "Cash Call (May) - £700k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 11,
+          "2": 11,
+          "3": 11,
+          "4": 11,
+          "5": 11,
+          "6": 11,
+          "7": 11,
+          "8": 11,
+          "9": 11,
+          "67": 11,
+          "68": 11
+        },
+        "winnerText": "Georgia won £700,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £700,000 WITH CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>GEORGIA</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "Georgia - 700k",
+          "type": "image",
+          "title": "Georgia - 700k",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-091414-408-vUZzMK3Z.jpeg"
+        },
+        "winnerDateStop": "2026-09-30T00:00:00.000+01:00",
+        "winnerDateStart": "2026-05-11T12:31:00.000+01:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-05-11T11:32:48.520Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:14:30.523Z"
+    },
+    {
+      "contentId": 1354,
+      "contentName": "Cash Call (May) - £600k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 12,
+          "2": 12,
+          "3": 12,
+          "4": 12,
+          "5": 12,
+          "6": 12,
+          "7": 12,
+          "8": 12,
+          "9": 12,
+          "67": 12,
+          "68": 12
+        },
+        "winnerText": "Charlie won £600,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £600,000 WITH CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>CHARLIE</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "Charlie - £600k",
+          "type": "image",
+          "title": "Charlie - £600k",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-091458-247-2g9wq16n.jpeg"
+        },
+        "winnerDateStop": "2026-09-30T00:00:00.000+01:00",
+        "winnerDateStart": "2026-05-05T09:46:00.000+01:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-05-05T08:46:48.743Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:15:12.221Z"
+    },
+    {
+      "contentId": 1321,
+      "contentName": "Cash Call (April) - £500k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 13,
+          "2": 13,
+          "3": 13,
+          "4": 13,
+          "5": 13,
+          "6": 13,
+          "7": 13,
+          "8": 13,
+          "9": 13,
+          "67": 13,
+          "68": 13
+        },
+        "winnerText": "Jess won £500,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £500,000 WITH CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>JESS</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "JESS £500k",
+          "type": "image",
+          "title": "JESS £500k",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-091533-528-Bjjh5jLT.jpeg"
+        },
+        "winnerDateStop": "2026-09-30T00:00:00.000+01:00",
+        "winnerDateStart": "2026-04-27T08:48:00.000+01:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-04-27T07:49:23.622Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:15:43.143Z"
+    },
+    {
+      "contentId": 1288,
+      "contentName": "Cash Call (April) - £400k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 14,
+          "2": 14,
+          "3": 14,
+          "4": 14,
+          "5": 14,
+          "6": 14,
+          "7": 14,
+          "8": 14,
+          "9": 14,
+          "67": 14,
+          "68": 14
+        },
+        "winnerText": "Jamie won £400,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £400,000 WITH CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>JAMIE</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "JAMIE £400K",
+          "type": "image",
+          "title": "JAMIE £400K",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-091605-630-NLRsAF0N.jpeg"
+        },
+        "winnerDateStop": "2026-09-30T00:00:00.000+01:00",
+        "winnerDateStart": "2026-04-17T18:16:00.000+01:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-04-17T17:17:34.478Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:16:18.540Z"
+    },
+    {
+      "contentId": 1190,
+      "contentName": "Cash Call (Feb) - £400k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 18,
+          "2": 18,
+          "3": 18,
+          "4": 18,
+          "5": 18,
+          "6": 18,
+          "7": 18,
+          "8": 18,
+          "9": 18,
+          "67": 18,
+          "68": 18
+        },
+        "winnerText": "Daniel won £400,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £400,000 WITH CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"color:#FFFFFF;font-size:2rem;\"><i><strong>DANIEL</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "DANIEL",
+          "type": "image",
+          "title": "DANIEL",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-090511-481-Icav0V9H.jpeg"
+        },
+        "winnerDateStop": "2026-08-31T00:00:00.000+01:00",
+        "winnerDateStart": "2026-04-08T09:53:00.000+01:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-04-08T08:55:26.623Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:05:11.826Z"
+    },
+    {
+      "contentId": 1123,
+      "contentName": "Cash Call (March) - £500K",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 15,
+          "2": 15,
+          "3": 15,
+          "4": 15,
+          "5": 15,
+          "6": 15,
+          "7": 15,
+          "8": 15,
+          "9": 16,
+          "67": 15,
+          "68": 15
+        },
+        "winnerText": "Mike won £500,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £500,000 WITH CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>MIKE</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "mike- £500k",
+          "type": "image",
+          "title": "mike- £500k",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-091711-789-bgWrofLd.jpeg"
+        },
+        "winnerDateStop": "2026-10-31T00:00:00.000+00:00",
+        "winnerDateStart": "2026-03-25T15:20:00.000+00:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-03-25T15:21:41.071Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:17:38.554Z"
+    },
+    {
+      "contentId": 1090,
+      "contentName": "Cash Call (March) - £475k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 16,
+          "2": 16,
+          "3": 16,
+          "4": 16,
+          "5": 16,
+          "6": 16,
+          "7": 16,
+          "8": 16,
+          "9": 15,
+          "67": 16,
+          "68": 16
+        },
+        "winnerText": "Amanda won £475,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £475,000 WITH CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"color:#FFFFFF;font-size:2rem;\"><i><strong>AMANDA</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "Amanda £475k",
+          "type": "image",
+          "title": "Amanda £475k",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-091757-998-9gq9e7M4.jpeg"
+        },
+        "winnerDateStop": "2026-08-31T00:00:00.000+01:00",
+        "winnerDateStart": "2026-03-16T14:48:00.000+00:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-03-16T14:49:24.394Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:18:11.083Z"
+    },
+    {
+      "contentId": 1057,
+      "contentName": "Cash Call (March) - £450k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 17,
+          "2": 17,
+          "3": 17,
+          "4": 17,
+          "5": 17,
+          "6": 17,
+          "7": 17,
+          "8": 17,
+          "9": 17,
+          "67": 17,
+          "68": 17
+        },
+        "winnerText": "Chris won £450,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £450,000 WITH CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>CHRIS</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "CHRIS 450K",
+          "type": "image",
+          "title": "CHRIS 450K",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-090423-403-KbGBn5Dp.jpeg"
+        },
+        "winnerDateStop": "2026-08-31T00:00:00.000+01:00",
+        "winnerDateStart": "2026-03-10T14:15:00.000+00:00",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-03-10T14:17:31.510Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:02:14.778Z"
+    },
+    {
+      "contentId": 1024,
+      "contentName": "Cash Call (Feb) - £350k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 19,
+          "2": 19,
+          "3": 19,
+          "4": 19,
+          "5": 19,
+          "6": 19,
+          "7": 19,
+          "8": 19,
+          "9": 19,
+          "67": 19,
+          "68": 19
+        },
+        "winnerText": "Tony won £350,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £350,000 WITH CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"color:#FFFFFF;font-size:2rem;\"><i><strong>TONY</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "TONY 350K",
+          "type": "image",
+          "title": "TONY 350K",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-091832-530-Ub0GmVap.jpeg"
+        },
+        "winnerDateStop": "2026-08-30T23:00:00.000Z",
+        "winnerDateStart": "2026-02-24T09:24:00.000Z",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-02-24T09:26:23.971Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:18:39.519Z"
+    },
+    {
+      "contentId": 958,
+      "contentName": "Cash Call (Feb) - £222k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 20,
+          "2": 20,
+          "3": 20,
+          "4": 20,
+          "5": 20,
+          "6": 20,
+          "8": 20,
+          "9": 20,
+          "67": 20,
+          "68": 20
+        },
+        "winnerText": "Dagnija won £222,000 with Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £222,000 WITH CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>DAGNIJA</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "dagnija",
+          "type": "image",
+          "title": "dagnija",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-090552-821-ZGg6i5nb.jpeg"
+        },
+        "winnerDateStop": "2026-08-30T23:00:00.000Z",
+        "winnerDateStart": "2026-02-09T15:19:00.000Z",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-02-09T15:21:05.278Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:06:11.158Z"
+    },
+    {
+      "contentId": 926,
+      "contentName": "January Cash Call - £400k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 21,
+          "2": 21,
+          "3": 21,
+          "4": 21,
+          "5": 21,
+          "6": 21,
+          "8": 21,
+          "9": 21,
+          "67": 21,
+          "68": 21
+        },
+        "winnerText": "Andy won £400,000 with January Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £400,000 WITH JANUARY CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>ANDY</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "ANDY",
+          "type": "image",
+          "title": "ANDY",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-090649-381-q7fVdHwY.jpeg"
+        },
+        "winnerDateStop": "2026-07-30T23:00:00.000Z",
+        "winnerDateStart": "2026-02-05T16:42:00.000Z",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-02-05T16:43:35.572Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:07:25.863Z"
+    },
+    {
+      "contentId": 925,
+      "contentName": "January Cash Call - £350k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 22,
+          "2": 22,
+          "3": 22,
+          "4": 22,
+          "5": 22,
+          "6": 22,
+          "8": 22,
+          "9": 22,
+          "67": 22,
+          "68": 22
+        },
+        "winnerText": "Renato won £350,000 with January Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £350,000 WITH JANUARY CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>RENATO</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "RENATO",
+          "type": "image",
+          "title": "RENATO",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-090736-342-6kiQL9Qo.jpeg"
+        },
+        "winnerDateStop": "2026-07-30T23:00:00.000Z",
+        "winnerDateStart": "2026-02-05T16:38:00.000Z",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-02-05T16:40:19.352Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:09:04.668Z"
+    },
+    {
+      "contentId": 892,
+      "contentName": "January Cash Call - £300k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 23,
+          "2": 23,
+          "3": 23,
+          "4": 23,
+          "5": 23,
+          "6": 23,
+          "8": 23,
+          "9": 23,
+          "67": 23,
+          "68": 23
+        },
+        "winnerText": "Hayley won £300,000 with January Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £300,000 WITH JANUARY CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>HAYLEY</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "Hayley",
+          "type": "image",
+          "title": "Hayley",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-090816-444-sG6DzlUr.jpeg"
+        },
+        "winnerDateStop": "2026-08-30T23:00:00.000Z",
+        "winnerDateStart": "2026-01-19T09:25:00.000Z",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-01-19T09:26:58.108Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:09:59.540Z"
+    },
+    {
+      "contentId": 859,
+      "contentName": "January Cash Call - £200k",
+      "contentType": "card-winner",
+      "contentBrands": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        67,
+        68
+      ],
+      "contentDisabled": false,
+      "contentMeta": {
+        "priorities": {
+          "1": 24,
+          "2": 24,
+          "3": 24,
+          "4": 24,
+          "5": 24,
+          "6": 24,
+          "8": 24,
+          "9": 24,
+          "67": 24,
+          "68": 24
+        },
+        "winnerText": "Marie won £200,000 with January Cash Call!",
+        "winnerBadge": "Cash Call",
+        "winnerQuote": "<p><span style=\"font-size:1.25rem;\"><i><strong>WON £200,000 WITH JANUARY CASH CALL!</strong></i></span></p>",
+        "winnerTitle": "<p style=\"text-align:right;\"><span style=\"font-size:2rem;\"><i><strong>MARIE</strong></i></span></p>",
+        "winnerPicture": {
+          "alt": "Marie",
+          "type": "image",
+          "title": "Marie",
+          "width": 1080,
+          "height": 1920,
+          "source": "20260706/20260706-090858-903-9HzZbnNP.jpeg"
+        },
+        "winnerDateStop": "2026-08-30T23:00:00.000Z",
+        "winnerDateStart": "2026-01-09T17:59:00.000Z",
+        "winnerButtonType": "homepageLink"
+      },
+      "createdAt": "2026-01-09T18:00:48.885Z",
+      "updatedBy": 2,
+      "updatedAt": "2026-07-06T10:10:45.580Z"
+    }
+  ],
+  "faqs": [
+    {
+      "faqId": 21,
+      "faqQuestion": "How do you select your competition winners?",
+      "faqAnswer": "<p>We use an automated computer system driven by an algorithm that selects winners from all the entries received at random whether they’re received by SMS, online, post, phone call or a mixture of methods. Entrants are randomly selected irrespective of any other factors such as whether they’ve entered before or for the first time, the method they used to enter, geographic location, gender or any other information beyond the mobile numbers from which the entries are sent.</p>",
+      "faqPlaces": [
+        4
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:37:21.486Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:37:21.486Z"
+    },
+    {
+      "faqId": 20,
+      "faqQuestion": "How will you contact me if I’m the winner?",
+      "faqAnswer": "<p>If you’ve won a prize with us, we will almost always talk to you by phone first – and will advise you of the process to redeem your prize.&nbsp;<br>For some of our competitions you may need to be available to answer the phone at specific times, so make sure to refer to the relevant competition’s Terms &amp; Conditions.</p>",
+      "faqPlaces": [
+        4
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:37:02.882Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:37:02.882Z"
+    },
+    {
+      "faqId": 19,
+      "faqQuestion": "Can I enter this competition again?",
+      "faqAnswer": "<p>Each competition has its own entry limit, so you will need to refer to the relevant competition’s Terms &amp; Conditions. Entry packages available will be made clear on the competition page.</p>",
+      "faqPlaces": [
+        4
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:36:45.236Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:36:45.236Z"
+    },
+    {
+      "faqId": 18,
+      "faqQuestion": "How do you select your competition winners?",
+      "faqAnswer": "<p>We use an automated computer system driven by an algorithm that selects winners from all the entries received at random whether they’re received by SMS, online, post, phone call or a mixture of methods. Entrants are randomly selected irrespective of any other factors such as whether they’ve entered before or for the first time, the method they used to enter, geographic location, gender or any other information beyond the mobile numbers from which the entries are sent.</p>",
+      "faqPlaces": [
+        2
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:36:24.617Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:36:24.617Z"
+    },
+    {
+      "faqId": 17,
+      "faqQuestion": "Can I buy an entry bundle and use the entries in different competitions?",
+      "faqAnswer": "<p>No. Each bundle of entries purchased goes into the draw of the specific competition you bought the entries for. In the case of competitions that are played on the radio, if you want to enter more than one round, you will have to purchase entries for each separate round when each round is open.</p>",
+      "faqPlaces": [
+        2
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:36:07.856Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:36:07.856Z"
+    },
+    {
+      "faqId": 16,
+      "faqQuestion": "Can I enter for free?",
+      "faqAnswer": "<p>Some of our competitions will have a free route of entry, but not all. Entry options available will be made clear on each competition page.</p>",
+      "faqPlaces": [
+        2
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:35:49.994Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:35:49.994Z"
+    },
+    {
+      "faqId": 15,
+      "faqQuestion": "How do I pay for my entries?",
+      "faqAnswer": "<p>You can pay for your entries by debit card, via Paypal, Apple Pay, Google Pay or pay via your mobile phone bill.</p>",
+      "faqPlaces": [
+        2
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:35:35.414Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:35:35.414Z"
+    },
+    {
+      "faqId": 14,
+      "faqQuestion": "Where can I find recent winners?",
+      "faqAnswer": "<p>You can see some of our recent winners <a href=\"/winners\">here</a>.</p>",
+      "faqPlaces": [
+        2
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:35:21.742Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:35:21.742Z"
+    },
+    {
+      "faqId": 13,
+      "faqQuestion": "Who do I contact if I have a question about my entry?",
+      "faqAnswer": "<p>If you have questions about your entries, you can contact our Customer Support team <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://global.com/contact/\">here</a>.</p>",
+      "faqPlaces": [
+        3
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:34:06.342Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:34:06.342Z"
+    },
+    {
+      "faqId": 12,
+      "faqQuestion": "How will you contact me if I’m the winner?",
+      "faqAnswer": "<p>If you’ve won a prize with us, we will almost always talk to you by phone first – and will advise you of the process to redeem your prize.&nbsp;<br>For some of our competitions you may need to be available to answer the phone at specific times, so make sure to refer to the relevant competition’s Terms &amp; Conditions.</p>",
+      "faqPlaces": [
+        3
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:33:35.535Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:33:35.535Z"
+    },
+    {
+      "faqId": 11,
+      "faqQuestion": "How do you select your competition winners?",
+      "faqAnswer": "<p>We use an automated computer system driven by an algorithm that selects winners from all the entries received at random whether they’re received by SMS, online, post, phone call or a mixture of methods. Entrants are randomly selected irrespective of any other factors such as whether they’ve entered before or for the first time, the method they used to enter, geographic location, gender or any other information beyond the mobile numbers from which the entries are sent.</p>",
+      "faqPlaces": [
+        3
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:33:13.601Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:33:13.601Z"
+    },
+    {
+      "faqId": 10,
+      "faqQuestion": "Can I enter a competition multiple times?",
+      "faqAnswer": "<p>Each competition has its own entry limit, so you will need to refer to the relevant competition’s Terms &amp; Conditions. Entry packages available will be made clear on the competition page.</p>",
+      "faqPlaces": [
+        3
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:32:54.842Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:32:54.842Z"
+    },
+    {
+      "faqId": 9,
+      "faqQuestion": "Can I enter from anywhere in the UK?",
+      "faqAnswer": "<p>For most of our competitions, you are eligible to enter and win if you’re a resident of the United Kingdom and are located in the UK at the time of your entry.&nbsp;</p><p>However you should always check the specific competition rules.</p>",
+      "faqPlaces": [
+        3
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:32:40.701Z",
+      "updatedBy": 232,
+      "updatedAt": "2026-03-23T10:22:21.031Z"
+    },
+    {
+      "faqId": 8,
+      "faqQuestion": "Who do I contact if I have a question about my entry?",
+      "faqAnswer": "<p>If you have questions about your entries, you can contact our Customer Support team<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://global.com/contact/\"> here</a>.<br>&nbsp;</p>",
+      "faqPlaces": [
+        1
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:32:10.182Z",
+      "updatedBy": 232,
+      "updatedAt": "2026-03-23T10:24:02.390Z"
+    },
+    {
+      "faqId": 7,
+      "faqQuestion": "Why did my entry/ies fail?",
+      "faqAnswer": "<p>If you selected ‘pay by mobile’ but your entry failed, there are many different reasons for why this could be. Not all mobile networks support this kind of transaction – it’s only available on O2, Vodafone, EE and Three. Otherwise, it could be due to insufficient funds, a block, a monthly cap that’s been exceeded, or another problem with your mobile phone network. You’ll need to contact your network about this.&nbsp;<br>If you entered via PayPal and your entry failed, you may have insufficient funds in your account. Please contact PayPal if in doubt.&nbsp;<br>If you chose to pay via Debit Card and your entry failed, you may have insufficient funds in your account, or you may have entered the billing details incorrectly, ie. billing address, CVV. Please contact your bank if in doubt.&nbsp;<br>If payment via Apple Pay/Google Pay failed, you’ll need to contact your bank about this.</p>",
+      "faqPlaces": [
+        1
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:31:22.955Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:31:22.955Z"
+    },
+    {
+      "faqId": 6,
+      "faqQuestion": "I was a winner on another Global Network competition recently. Can I enter?",
+      "faqAnswer": "<p>If you’ve won a prize valued at £1,000 or more or you’ve won more than one prize of any value on any of <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://global.com/\">Global’s</a> platforms within the last six months you won’t be eligible to win again until any exclusion period has ended. This exclusion period is detailed in the <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://global.com/wp-content/uploads/2023/08/General-Prize-Promotion-Terms-and-Conditions.pdf\">General Prize Promotions Terms and Conditions</a> and would have been communicated to you when you redeemed your prize.&nbsp;</p>",
+      "faqPlaces": [
+        1
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:31:00.282Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:31:00.282Z"
+    },
+    {
+      "faqId": 5,
+      "faqQuestion": "Can I enter a competition multiple times?",
+      "faqAnswer": "<p>Each competition has its own entry limit, so you will need to refer to the relevant competition’s Terms &amp; Conditions. Entry packages available will be made clear on the competition page.</p>",
+      "faqPlaces": [
+        1
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:30:01.044Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:30:01.044Z"
+    },
+    {
+      "faqId": 4,
+      "faqQuestion": "Can I buy an entry bundle and use the entries in different competitions?",
+      "faqAnswer": "<p>No. Each bundle of entries purchased goes into the draw of the specific competition you bought the entries for. In the case of competitions that are played on the radio, if you want to enter more than one round, you will have to purchase entries for each separate round when each round is open.</p>",
+      "faqPlaces": [
+        1
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:29:45.321Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:29:45.321Z"
+    },
+    {
+      "faqId": 3,
+      "faqQuestion": "Can I enter from anywhere in the UK?",
+      "faqAnswer": "<p>For most of our competitions, you are eligible to enter and win if you’re a resident of the United Kingdom and are located in the UK at the time of your entry.&nbsp;</p><p>However you should always check the specific competition rules.</p>",
+      "faqPlaces": [
+        1
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:29:27.343Z",
+      "updatedBy": 232,
+      "updatedAt": "2026-03-23T10:24:27.770Z"
+    },
+    {
+      "faqId": 2,
+      "faqQuestion": "How will you contact me if I’m the winner?",
+      "faqAnswer": "<p>If you’ve won a prize with us, we will almost always talk to you by phone first – and will advise you of the process to redeem your prize.&nbsp;<br>For some of our competitions you may need to be available to answer the phone at specific times, so make sure to refer to the relevant competition’s Terms &amp; Conditions.</p>",
+      "faqPlaces": [
+        1
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:29:02.582Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:29:02.582Z"
+    },
+    {
+      "faqId": 1,
+      "faqQuestion": "How do you select your competition winners?",
+      "faqAnswer": "<p>We use an automated computer system driven by an algorithm that selects winners from all the entries received at random whether they’re received by SMS, online, post, phone call or a mixture of methods. Entrants are randomly selected irrespective of any other factors such as whether they’ve entered before or for the first time, the method they used to enter, geographic location, gender or any other information beyond the mobile numbers from which the entries are sent.</p>",
+      "faqPlaces": [
+        1
+      ],
+      "faqMeta": {},
+      "createdAt": "2023-11-27T16:28:42.142Z",
+      "updatedBy": 4,
+      "updatedAt": "2023-11-27T16:28:42.142Z"
+    }
+  ],
+  "entryMethods": [
+    "voucher",
+    "apple",
+    "google",
+    "card",
+    "mobile",
+    "paypal"
+  ]
+}

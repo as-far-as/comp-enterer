@@ -52,6 +52,17 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
 
+# A real personal Global Player (Heart/Capital/etc.) login — email + password
+# for Global's own Gigya SSO account system. Only read by
+# stations/heart_global.py's login(), which is only ever called on-demand for
+# future entry-submission work, never from scheduled discovery
+# (stations/heart_global.py's own ingest() reads winplus.heart.co.uk's public,
+# unauthenticated competition JSON and touches neither of these). Real
+# account-suspension risk if Global's own anti-automation detection ever
+# flags it — an explicitly accepted risk, see docs/build-log.md.
+GLOBAL_PLAYER_EMAIL = os.environ.get("GLOBAL_PLAYER_EMAIL", "")
+GLOBAL_PLAYER_PASSWORD = os.environ.get("GLOBAL_PLAYER_PASSWORD", "")
+
 # Polite crawling defaults — see aggregators/loquax.py for why this matters.
 USER_AGENT = os.environ.get(
     "RADIOCOMP_USER_AGENT",
