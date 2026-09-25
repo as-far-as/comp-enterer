@@ -833,3 +833,921 @@ version — Cloud Run resolves `:latest` at request/execution time for
 Jobs, though the *Service* only re-resolves it for new container
 instances, so a stale warm instance could keep the old value briefly;
 worth a fresh revision if that matters sooner rather than later).
+
+## 2026-09-04 — Entry-execution engine + results tracking (spec sections 5 and 7)
+
+Approve today only recorded a decision. Built the real thing: automated
+web-form entry filling (drafted, then human-approved, then submitted) and
+a minimal results-tracking follow-up.
+
+**Checked against real live data before designing anything**: pulled the
+real `entry_channels.json` from the GCS bucket. Zero discovered
+`EntryChannel`s were `web_form` *and* confidently free *and* not flagged
+for review — the 8 real "approvable" channels are all `post` (5) or
+`phone_entry` (3), both explicitly non-automatable per CLAUDE.md (no
+phone automation ever; nothing here can post a letter). This proves
+`is_free_route`/`review_recommended` alone never encode the phone/post
+ban — confirmed the design had to check `channel_type == web_form` as its
+own hard-coded, independent condition, not infer it. Built the full
+pipeline anyway, verified against a hand-built realistic fixture form
+(`tests/fixtures/entry_execution/sample_entry_form.html`) rather than
+waiting for a real qualifying case or loosening a classifier to manufacture
+one.
+
+**A real safety gap found and fixed before writing anything else**:
+`notify/channel_selection.py`'s `select_approvable_channel()` had no
+channel-type awareness at all — harmless while nothing qualified, but the
+moment a real free `web_form` channel got discovered, the *already-shipped*
+Approve/Skip flow would have put an immediate, unreviewed button on it,
+creating an `EntryRecord(status=APPROVED, channel_type=web_form)` with no
+draft, no fill plan, no screenshot — exactly what the two-stage design
+below exists to prevent. Fixed by excluding `web_form` from that
+function's selection loop; regression test added.
+
+**Design, confirmed with the user via three explicit choices**: build the
+full pipeline now, even though nothing currently qualifies; use
+Claude-assisted generic field mapping rather than hardcoded per-site
+selectors; two-stage approval (see a filled-but-unsubmitted screenshot
+first, a second tap actually submits) rather than one-tap-submits.
+
+**Built:**
+- `UserProfile` storage (`storage/user_profile_store.py`,
+  `setup_user_profile.py`) — a single stored record, not a keyed
+  collection (matches the model's deliberately-singular design), set up by
+  the user directly in their own terminal, never through this conversation.
+  `--check` prints a masked summary.
+- `entry_execution/eligibility.py` — the two hard-filtered queries
+  (`find_draftable_channels`, `find_submittable_entries`), pure and
+  fixture-tested, both independently re-asserting `channel_type ==
+  web_form` rather than trusting `is_free_route`/`review_recommended` alone.
+- `entry_execution/fill_plan.py` — the schema an LLM mapping must satisfy
+  before any code touches a real page: every selector must be one actually
+  sent (blocks an invented selector), no duplicates, field count matches,
+  every `profile_field` is one of the 5 known `UserProfile` attributes,
+  every checkbox has an explicit action. `build_fill_actions()` is where
+  PII actually enters the picture — deliberately kept out of the LLM call
+  itself.
+- `entry_execution/llm_mapping.py` — the one Claude call this feature
+  makes (`claude-opus-5`, per the claude-api skill's non-negotiable
+  default — corrected after an earlier draft of the plan suggested Sonnet).
+  Only field structure (selector/label/type/options) and the 5 profile
+  field *names* are sent, never real values. Uses
+  `client.messages.parse(output_format=FormMapping)` — confirmed this is
+  still the right shape against the actually-installed `anthropic` 1.3.0
+  SDK (`response.parsed_output`), not assumed from training data.
+- `entry_execution/browser.py` — Playwright field extraction (tags each
+  field with its own `data-rc-field` marker rather than trusting the
+  page's own ids/names) and fill/check application at a varied, non-machine
+  pace.
+- `entry_execution/draft.py` / `submit.py` — the two stages.
+  **The concrete mechanism, not just a claim, behind "a stray page change
+  between draft and confirm can't cause an unreviewed action"**: a
+  dedicated test (`test_re_extraction_on_a_fresh_page_reassigns_the_same_
+  markers`) proves re-extracting fields on a completely fresh page load
+  reassigns identical selectors in the same order, provided the form's
+  structure hasn't changed — so `submit.py` re-extracts on its own
+  freshly-navigated page and verifies every saved selector still exists
+  before ever touching the page, rather than trusting a stale selector
+  from draft time. A third, defensive layer: an `APPROVED` `web_form`
+  record with no saved `fill_plan` is refused outright, `FAILED`, never a
+  blind submit.
+- `notify/telegram_client.py` gained `send_photo` (draft screenshots) and
+  `edit_message_caption` (clearing buttons on a photo message — discovered
+  while writing `webhook/handlers.py` that `editMessageText` 400s against
+  a message that was sent as a photo).
+- `notify/callback_data.py` generalised its parameter names (`id1`/`id2`)
+  to carry `w`/`l` outcome actions (`entry_id` as the second id) alongside
+  the existing `a`/`s` encoding.
+- `webhook/handlers.py` — three flows sharing one callback encoding: a
+  fresh discovery Approve/Skip (unchanged), a draft Submit/Reject that
+  updates the *same* `DRAFTED`+`web_form` `EntryRecord` in place rather
+  than creating a second one, and outcome Won/No dispatched before any
+  promotion/channel lookup (outcome callbacks carry an `entry_id`, not a
+  `channel_id`). Extended tests cover all three plus the repeat-tap/
+  already-recorded case for each.
+- `outcomes/reminder.py` — `find_pending_outcome_checks()` /
+  `notify_pending_outcomes()`: a `SUBMITTED` entry whose promotion's
+  deadline (plus a 5-day announce buffer) has passed, with no `Outcome`
+  yet, gets asked once via a Won/No Telegram message. An entry whose
+  promotion has no known deadline is never flagged — no principled date to
+  ask by.
+- `run_entry_execution.py` — the new Cloud Run Job entrypoint: checks
+  eligibility first (no Playwright import at all if nothing qualifies),
+  then draft/submit/outcome-reminder steps, each independently caught.
+- `Dockerfile.entry-execution` + `cloudbuild.entry-execution.yaml` — based
+  on `mcr.microsoft.com/playwright/python:v1.62.0-noble` rather than
+  hand-installing Chromium onto `python:3.13-slim`, confirmed via the
+  Playwright docs that the tag version must exactly match the pip
+  package version or Playwright can't find its browser executable.
+  `requirements.txt`'s `playwright` pin changed from `>=1.44` to
+  `==1.62.0` accordingly (already the version installed locally, so no
+  local environment change).
+- `tests/test_entry_execution_live.py` — the one genuinely live piece (a
+  real Claude call against the fixture form), gated behind
+  `ANTHROPIC_API_KEY` and correctly skipped locally (no key set yet).
+
+**Verified so far**: full test suite green (107 passed, 1 skipped —
+the live test — at time of writing), every new module import-checked
+against the real installed `anthropic`/`playwright` packages (not just
+assumed from the plan), `run_entry_execution.py` smoke-tested against an
+empty local data dir (exits 0, "Nothing draftable or submittable this
+tick", no Playwright launch attempted).
+
+**Outstanding**: the user's manual setup steps (real `setup_user_profile`
+run, Anthropic API key + `anthropic-api-key` secret creation), then
+deploying `radio-comp-entry-execution` + its Cloud Scheduler job, then a
+genuine end-to-end run — seeding one synthetic qualifying promotion/channel
+to force a real draft, since nothing discovered currently qualifies.
+
+## 2026-09-07 — Entry-execution engine deployed and live
+
+User's manual steps done: `setup_user_profile` run for real (once against
+`STORAGE_BACKEND=firestore`, the local default, then again explicitly
+against `STORAGE_BACKEND=gcs` so the deployed Job — which uses `gcs`, same
+reason as every other Cloud Run workload here — can actually see it); the
+`anthropic-api-key` secret created in Secret Manager.
+
+**A real recurrence of a previously-documented gotcha, hit again**:
+`setup_user_profile`'s first attempt 403'd with `PERMISSION_DENIED` from
+Firestore. Application Default Credentials
+(`~/.config/gcloud/application_default_credentials.json`) is a single
+global file, not scoped per gcloud configuration — the user's NatureMetrics
+day-job gcloud usage (default config, `dbol-prod` project) had at some
+point run an impersonated-service-account ADC login, silently overwriting
+this project's personal-account ADC (confirmed by inspecting the file's
+`"type"` field: `impersonated_service_account`, not `authorized_user`).
+Fixed by re-running `gcloud auth application-default login
+--configuration=radio-comp`, logged in as the personal account, no
+impersonation. Saved as a standing memory (not just a repo note) since
+this is bound to recur given its root cause is unrelated day-job tooling,
+not anything under this project's control.
+
+**Deployed for real**, mirroring the discovery Job's established pattern
+exactly (same default compute service account, same `STORAGE_BACKEND=gcs`
+env vars, same Scheduler → `jobs.run` OAuth pattern):
+- Built and pushed `Dockerfile.entry-execution` via
+  `cloudbuild.entry-execution.yaml`.
+- Granted the runtime service account `secretmanager.secretAccessor` on
+  `anthropic-api-key` (it already had it on `telegram-bot-token`).
+- Created the `radio-comp-entry-execution` Cloud Run Job — `2Gi`
+  memory / 2 CPU (Chromium needs meaningfully more than the discovery
+  Job's plain-`httpx` 512Mi) and a 600s task timeout (vs. discovery's
+  300s — page navigation/fill/submit is slower than a scrape), `maxRetries:
+  1` kept consistent with discovery rather than tightened, since the risky
+  window (a crash between `click_submit()` and the status write) is a
+  narrow, ordinary at-least-once-execution race no different in kind from
+  anything else in this codebase, not something introduced by this
+  feature.
+- **Verified with a real manual trigger before wiring up the scheduler**,
+  not just "deploy succeeded": `gcloud run jobs execute
+  radio-comp-entry-execution --wait` completed successfully;
+  `gcloud logging read` confirmed the actual log line —
+  `Nothing draftable or submittable this tick` — i.e. eligibility.py's
+  cheap pre-check correctly ran and correctly found nothing, without a
+  Playwright/Chromium launch, exactly as designed.
+- Created `radio-comp-entry-execution-15min`, a Cloud Scheduler job on
+  `*/15 * * * *` (Europe/London), calling the Job's `:run` endpoint the
+  same way `radio-comp-discovery-hourly` does.
+
+**Outstanding**: the genuine end-to-end verification still needs a
+synthetic qualifying `Promotion`+`EntryChannel` seeded (`web_form`, free,
+non-review) pointing at a safe test target, since nothing discovered so
+far actually qualifies — that's what would exercise a real draft
+screenshot arriving on Telegram with Submit/Reject buttons, a real Submit
+tap, and a real `submit_one()` pass on the next tick.
+
+## 2026-09-08 — First real end-to-end draft attempt: two bugs found, one design pivot
+
+Set up the synthetic test the previous entry called for: a throwaway
+public GCS bucket (`project-a6778446-201f-4aa5-a03-test-fixtures`,
+deliberately separate from the real data bucket — never made anything in
+the bucket holding real `UserProfile`/PII data public) hosting
+`tests/fixtures/entry_execution/sample_entry_form.html`, then a synthetic
+`Promotion`+`EntryChannel` (`[TEST]` prefixed, `web_form`, free,
+non-review) seeded directly into the real GCS data store pointing at it.
+
+**Bug 1 — `ModuleNotFoundError: No module named 'playwright'` on the first
+real manual trigger.** `Dockerfile.entry-execution`'s comment claimed
+`mcr.microsoft.com/playwright/python` ships the `playwright` pip package
+preinstalled, matching an initial reading of the Playwright docs — wrong.
+Confirmed via a Cloud Build probe (running `pip show playwright` and a
+real `chromium.launch()` inside the base image directly, no local Docker
+daemon available) that only the Chromium binary + its OS dependencies are
+baked in; the pip package itself still needs installing. Fixed by adding
+`playwright==1.62.0` back to the Dockerfile's `pip install` list —
+confirmed via the same probe that this finds the pre-baked browser with no
+download, so the image is still exactly as lean as intended, just needed
+one more explicit line. Real lesson: verify a base image's contents
+directly (Cloud Build can run an arbitrary probe against any image without
+needing a local Docker daemon) rather than trust a docs paraphrase about
+what's "preinstalled."
+
+**Design pivot — moved off Anthropic entirely, mid-deployment.** After
+fixing bug 1, the second real trigger reached the actual Claude API call
+and failed with `401 invalid x-api-key` — traced (via byte-length/prefix
+checks that never printed the actual secret value) to the
+`anthropic-api-key` secret holding a 5-byte placeholder, not a real key.
+Before fixing that, the user paused to reconsider: they didn't want this
+tied to their work Anthropic account, and asked about a personal-account
+or Gemini alternative instead. Clarified the real distinction (a claude.ai
+chat subscription, of any tier, gives no API access at all — the API is a
+separate console.anthropic.com product requiring its own billing even on
+a personal account) and that Gemini's free tier, via Google AI Studio,
+genuinely requires no billing at all. User chose Gemini.
+
+Verified the current Gemini Python SDK (`google-genai` 2.22.0) against
+its actual installed source before writing anything — not just docs
+paraphrases, which turned out to blend two different API generations in
+one WebFetch response (an older "Generate Content API," now marked
+legacy, vs. a newer "Interactions API"). Cross-checked the newer API's
+docs example against `google/genai/interactions.py`'s real
+`CreateModelInteractionParam`/`TextResponseFormatParam` TypedDicts
+directly in the installed package to confirm the exact call shape:
+`client.interactions.create(model=..., input=..., system_instruction=...,
+response_format={"type": "text", "mime_type": "application/json",
+"schema": FormMapping.model_json_schema()})`, reading `interaction.
+output_text` back. Rewrote `entry_execution/llm_mapping.py` accordingly
+(model: `gemini-3.8-flash`, a mid-tier choice for the same "wrong
+classification has real consequences" reason `claude-opus-5` was chosen
+originally), swapped `anthropic` for `google-genai>=2.22.0` in
+`requirements.txt`/`Dockerfile.entry-execution`, `ANTHROPIC_API_KEY` for
+`GEMINI_API_KEY` throughout (`.env.example`, the live test's skip gate,
+README). Full test suite still green (107 passed, 1 skipped) after the
+swap — `test_entry_execution_live.py` correctly skips locally with no
+`GEMINI_API_KEY` set.
+
+**Outstanding**: the user still needs to get a Gemini key from
+aistudio.google.com and create the `gemini-api-key` secret; then the image
+needs rebuilding/redeploying with the Gemini-based code, the Cloud Run
+Job's secret binding needs swapping from `ANTHROPIC_API_KEY` to
+`GEMINI_API_KEY`, and the same real end-to-end draft attempt needs
+re-running against the still-seeded synthetic promotion. The
+`anthropic-api-key` secret and the placeholder value in it can be deleted
+once this is confirmed working — left alone for now, harmless and
+unreferenced. `FormMapping.model_json_schema()`'s actual compatibility
+with Gemini's structured-output support (nested `$defs`/enums/Optional
+fields) is unverified until that first real call succeeds.
+
+## 2026-09-08 — Gemini pivot confirmed live; full entry-execution loop verified end to end
+
+Real Gemini call against the fixture form succeeded once the user created
+a correct `gemini-api-key` secret (the first attempt had a placeholder
+value, per the previous entry) — `FormMapping.model_json_schema()` works
+fine with Gemini's structured-output support, resolving the previous
+entry's open question. Rebuilt/redeployed `radio-comp-entry-execution`
+with the Gemini-based image and the new secret binding.
+
+**A real credential leak, caught by the user, not by a log review this
+time**: while diagnosing why a Submit tap silently did nothing, the user
+ran `getWebhookInfo` themselves and pasted the *result* into the
+conversation — but the bot token they'd used to build that URL turned
+out to actually be the `telegram-webhook-secret` value (both are 64-hex
+strings; easy to mix up), now exposed regardless of which one it
+technically was. Rotated both: new bot token via BotFather → new
+`telegram-bot-token` secret version; new `openssl rand -hex 32` →
+`telegram-webhook-secret`; forced a fresh webhook Service revision so it
+actually picks up the new bound secret values (Cloud Run Jobs re-resolve
+`:latest` automatically per execution, but a Service only does so for new
+container instances); re-ran `setWebhook` with both new values, confirmed
+via `getWebhookInfo` (never touching the raw token in a way that gets
+printed — piped straight from Secret Manager into the `curl` call in one
+shell pipeline).
+
+**A second real bug, found only by testing the actual Submit tap**: once
+the webhook was reachable again, tapping Submit produced "Already
+recorded" instead of the draft-confirmation flow, then crashed trying
+`editMessageText` against a photo message (`400 Bad Request`). Root
+cause: the *webhook Service's deployed image* was still the pre-entry-
+execution build — all of `handlers.py`'s new draft-branching/
+`edit_message_caption`/outcome-dispatch logic had been written and
+tested locally earlier in this project but never actually rebuilt+
+redeployed to the live Service (only the entry-execution *Job* had been
+rebuilt). Rebuilt and redeployed `radio-comp-webhook` for real; the
+identical tap then worked correctly (`"Approved — submitting shortly"`),
+and the next Job tick genuinely submitted the form
+(`status: submitted`, both `draft_screenshot_path` and
+`submitted_screenshot_path` populated). Confirmed via real screenshots
+that the "submitted" one shows a blank reloaded form — expected, not a
+bug, since the throwaway test fixture has no real backend to show a
+confirmation page; a real competition site would show one there instead.
+Cleaned up all synthetic test data (`[TEST]`-prefixed promotions/
+channels/records, their screenshots, the throwaway public
+`project-a6778446-201f-4aa5-a03-test-fixtures` bucket) from the real
+data store afterward.
+
+**Lesson, worth restating plainly**: rebuilding one image (the Job) after
+a cross-cutting code change doesn't mean every image sharing that code
+(the webhook Service) is also up to date — check what's *actually
+deployed* per Cloud Run resource, not just what's been rebuilt somewhere.
+
+## 2026-09-08 — talkSPORT "Online" channel classification: real widget access, not just page rendering
+
+With entry-execution fully verified but genuinely idle (real data: 0
+confidently-free `web_form` channels), asked whether that's likely to
+change on its own. Broke down the 30 real discovered channels by type:
+9 `web_form` (7 ambiguous, 2 paid, 0 free), 3 `post` + 6 `phone_entry`
+(free but permanently banned from automation) — concluded it's
+structural, not luck: talkSPORT's real entry-cost text for "Online" is
+often only rendered client-side, a gap already flagged (unverified) when
+`talksport.py` was first built.
+
+**First attempt — disproven by testing against real data, not assumed
+to work**: built a generic "re-fetch the page with Playwright, re-run
+the same static-HTML classifier against the rendered result" mechanism
+(`stations/rendering.py`, `talksport_widget`-agnostic merge/retry logic,
+a `radioexe.py` fix for a separately-found silent-omission bug — see
+below). Ran the actual backfill against a real copy of production
+data before trusting it: **0 of 7 real channels resolved.** Investigated
+why, live, rather than assuming: talkSPORT's "Online" entry cost isn't
+on the competition page at all, in any rendering — it's delegated to a
+third-party competition-entry platform (`win.talksport.com`) behind a
+cross-origin `<iframe class="authenticated-iframe" loading="lazy">`.
+Deleted the disproven `rendering.py` and its tests rather than leave
+dead scaffolding around.
+
+**Real mechanism, found and proven live, one blocker at a time**:
+1. What looked like non-deterministic flakiness in whether the iframe
+   even appeared turned out to be a User-Agent effect: this project's
+   existing polite, self-identifying `config.USER_AGENT` string reliably
+   got it into the DOM (5/5 attempts); Chromium's default headless UA got
+   it 0/6 times.
+2. The iframe uses native `loading="lazy"` (needs `scroll_into_view_if_needed`
+   to trigger) and sits behind a Sourcepoint cookie-consent modal
+   (dismissed best-effort via `page.frame_locator(...)`, since it isn't
+   always present).
+3. The widget's own text uses a different phrasing convention entirely
+   from the outer page's classifier ("£X PER ENTRY" / "YOUR TOTAL : £X",
+   not "charged at £X") — confirmed live: `£2.50 PER ENTRY`, tiered
+   bundle pricing, `YOUR TOTAL : £2.50`.
+
+Built `stations/talksport_widget.py` (talkSPORT-specific, not generic)
+implementing exactly this: `fetch_widget_text()` (consent-dismiss +
+scroll + frame-text extraction), `classify_widget_text()` (pure regex
+against the confirmed real pattern; a free-indicator pattern flagged as
+unverified — no real free example has been seen), `resolve_online_channel()`
+(never raises, falls back to the untouched static classification on any
+failure — same "never guess" posture as every other classifier here).
+Wired into `talksport.py`'s `ingest()` *after* the dedup-hash check
+(caught via a real log read after the first deploy: it was initially
+running before the check, wastefully re-resolving already-known
+duplicate promotions).
+
+**A second real finding, requiring a design change mid-implementation**:
+broader live testing (checking all 6 other real ambiguous URLs, not just
+the one already confirmed) showed the widget's appearance is genuinely
+intermittent — even a 15-second explicit `wait_for_selector` didn't help
+on a URL that had worked minutes earlier. Added a bounded retry
+(`fetch_widget_text(url, attempts=3)`, fresh browser launch each try) —
+a contained addition, not a new architecture.
+
+**A third, self-inflicted finding**: after extensive manual live testing
+(several dozen Chromium launches within ~20 minutes, well past this
+project's own "polite, low-volume" scraping ethos), talksport.com's own
+bot-detection started serving a "Verifying Device" challenge page instead
+of real content — to *plain `httpx` requests too*, confirming it wasn't
+Playwright-specific. This briefly made later local test results look
+like the widget had become totally unreliable; it hadn't — it was local
+testing volume triggering a temporary block against that IP. Stopped
+manual live-testing immediately rather than risk prolonging it, and used
+the deployed Cloud Run Job (a completely different IP, Google's own
+range, naturally paced at once-per-promotion) as the real verification
+method instead — consistent with this project's own "verify for real,
+not just tests pass" convention, just via infrastructure that wouldn't
+compound the problem.
+
+**Final real verification, from Cloud Run's IP, not a confounded local
+one**: a real discovery run (after rebuilding `Dockerfile` — same
+`mcr.microsoft.com/playwright/python:v1.62.0-noble` + explicit
+`playwright==1.62.0` pattern as `Dockerfile.entry-execution`, bumped
+`radio-comp-discovery`'s resources from `512Mi/1cpu/300s` to
+`2Gi/2cpu/600s`) ran clean, 0 failures. Ran the backfill for real via a
+one-off `--command`/`--args` override on the same Job (reverted
+immediately after, confirmed via `describe`) rather than from the
+now-possibly-flagged local machine: **4 of 7 real ambiguous channels
+resolved to confidently paid** (`£2.50 per entry`, real `raw_excerpt`
+audit trail from the actual widget text), the other 3 correctly stayed
+ambiguous — traced to those specific competitions' live pages no longer
+even mentioning "Online" as a heading at all (content drift since the
+original scrape, not a bug). Confirmed in the real stored data:
+`web_form` channels now break down as 6 paid / 3 unknown / 0 free (was
+2 paid / 7 unknown / 0 free before this phase).
+
+**Outcome, stated honestly**: zero new *qualifying free* channels — this
+pricing-tier widget appears to be a shared template across talkSPORT's
+whole platform, so it's plausible none of the 7 were ever going to
+resolve to free. The real value delivered is turning "stuck at unknown
+forever" into an audited, confident classification, which matters in its
+own right for tracking/EV-model accuracy, and the same mechanism will
+apply automatically to any newly-discovered talkSPORT competition going
+forward. Radio Exe's independent silent-omission fix (a web-form entry
+point with no cost phrase previously produced no channel at all, now
+correctly produces an ambiguous one) ships alongside this, unaffected by
+any of the above — its pages are fully server-rendered, confirmed
+already, so it never needed a Playwright retry at all.
+
+**Next step, per the user's own stated sequencing**: assess whether
+adding more discovery sources is worth it, now that this specific avenue
+has been explored as far as real data supports.
+
+## 2026-09-09 — New discovery sources: Bauer's "Make Me A Winner" live; Heart dropped for a real safety reason
+
+User's own verdict on the above: discovery volume isn't meeting
+expectations (only 2 aggregators, 2 direct monitors live, against an
+original plan naming 3 aggregators + "Global, Rayo/Bauer, talkSPORT").
+Research (internal docs + fresh live web research) confirmed the gap:
+Global and Bauer were both named in the original scope and both already
+had a 2026-09-02 informal feasibility check (Bauer's `hellorayo.co.uk`
+platform specifically, not Global as initially misremembered — corrected
+mid-investigation by a research agent that checked the actual log text
+rather than trusting the framing it was given) — but neither ever got a
+direct-monitor adapter built. User chose Global+Bauer first (one adapter
+covers 5-6 stations each, vs. one at a time for the seeded-but-unbuilt
+local tier), on the strength of Bauer's "Make Me A Winner" — a shared
+competition across Absolute/Kiss/Magic/Hits Radio/Greatest Hits Radio/
+Planet Rock with hints of a genuine free online entry route.
+
+**A real safety incident, caught before it became a real problem**:
+investigating `comp.heart.co.uk` (one of Heart's off-page entry
+subdomains) with Playwright, a plain page load — no click, no form fill —
+showed "Thank you! You have successfully entered the competition." This
+could have meant an unintended real entry. Verified properly rather than
+assumed either way: checked whether the text appeared *immediately* on
+load (it did — too fast for a real submission to have processed) and
+captured every network request the page made (`page.on("request")`) —
+only one non-GET request occurred, a routine Sourcepoint consent-tracking
+call, nothing resembling an entry submission. Confirmed safe: the
+"success" text is a front-end bug in Heart's own widget, which depends on
+a real login to Global's Gigya SSO account system and falls into a
+wrong-but-harmless default state when that login context is absent (as it
+always will be for an anonymous/automated visit). **Dropped Heart for
+this phase regardless** — even confirmed-harmless-to-read, a platform
+that shows misleading state when read passively, and whose real
+entry-detail mechanism needs a genuine personal login to a third-party
+account system (a materially bigger, new category of credential this
+project has never taken on), isn't worth building against right now.
+
+**Bauer's Make Me A Winner — built, and simpler than expected once
+investigated properly**: `makemeawinner.co.uk` itself is a pure
+client-rendered Vue SPA (empty `<div id="app">` from a plain fetch,
+confirmed) — but Playwright network-request capture (used carefully,
+checking first for the same kind of unintended-action risk found on
+Heart — confirmed safe: the listing page loads with an untouched, empty
+basket every time) found the real backend: a clean, unauthenticated
+JSON API at `api.winhappy.com`. `GET /session/data` returns a short-lived
+guest bearer token in its `X-Session` response header (no login, no
+cookies), which authorizes `GET /campaign/page/HOME` — returning every
+live competition with a genuine `is_free` boolean straight from Bauer's
+own backend. Confirmed this whole flow works via plain `httpx` alone —
+**no Playwright needed for this adapter at all**, a better outcome than
+the plan's own fallback design (full-page rendering). This is also the
+first source in this codebase where entry-cost classification is a real
+field from the source system, not a regex/keyword guess against scraped
+text — meaning it's confident in both directions (`is_free_route=True`
+*or* `False`, never `review_recommended` unless the field is genuinely
+absent), unlike every other adapter's classifier here.
+
+Built `src/radiocomp/stations/bauer_makemeawinner.py` (`fetch_session_token`
+→ `fetch_listing` → `parse_campaign_item` per item, `BUNDLE`-type items
+skipped since they're paid entry-multiplier add-ons, not distinct
+competitions) and extended `compliance/engine.py`'s
+`SHARED_LIMIT_NETWORKS["Bauer"]` with `magic`, `hits radio`,
+`planet rock` (confirmed live via the API's own station list — closing a
+gap the module's own docstring had already flagged) and this adapter's
+own `station_name_raw` ("Make Me A Winner (Bauer)"), so the cross-brand
+duplicate check actually recognises its promotions as Bauer-network.
+
+**Verified for real, not just tests passing**: rebuilt/redeployed
+`radio-comp-discovery` (no Dockerfile changes needed — Playwright was
+already there from the talkSPORT widget work, unused by this adapter but
+harmless), triggered it live — **4 adapters ran, 0 failed, 15 new
+promotions in one run** (promotions 50→70, `web_form` channels 21 paid +
+3 still-unresolved-talkSPORT / 0 free). Real, substantial volume increase,
+addressing the user's actual complaint directly. Honest bottom line, same
+shape as the talkSPORT widget work: all 15 real live Bauer campaigns are
+currently paid — zero new qualifying free channels *today* — but the
+classification is now genuinely confident (a real field, not a guess) and
+will catch a free one immediately and correctly the moment one appears,
+which real data shows does happen on this platform (some campaigns in
+Bauer's own data model are marked free) even if none currently are.
+
+**Heart/Global remains a real, larger opportunity if revisited later** —
+just gated on a decision to take on real personal-account credentials for
+a third-party platform, which this project hasn't needed before and
+shouldn't take on lightly.
+
+## 2026-09-09 — Real bug found by the user, not by this project: Bauer's free phone route was invisible
+
+Real payoff and a real miss, same day. User reported a flurry of real
+Telegram notifications from the new Bauer adapter (confirming actual
+delivered volume, not just a log count) — then, investigating one
+personally, found they could enter completely free via the campaign's
+phone line, which `bauer_makemeawinner.py` had only ever recorded as a
+paid `web_form` channel. This was a genuine gap, not something outside
+the original investigation's scope: the 2026-09-09 research (same day,
+earlier) had already found and documented that paid campaigns carry a
+separate, genuinely free postal/phone "no purchase necessary" alternative
+in their own T&Cs — the approved plan even said to model it as its own
+`POST`/`PHONE_ENTRY` channel — but the shipped adapter only ever built the
+one `web_form` channel per campaign. The design was right; the
+implementation was incomplete. Caught by the user actually using the
+system for real, not by any test or review here.
+
+**Clarified explicitly for the user**: no, this can't and won't be
+automated — CLAUDE.md's phone-channel ban is absolute, a free phone-line
+IVR route included, regardless of EV. The fix is entirely about
+*visibility*: make sure the free phone/post route shows up in the
+Telegram notification the same way a free web form would, so the user
+sees it and can act on it manually themselves, same as they just did on
+their own initiative.
+
+**Root-caused the exact number the original web search couldn't verify**:
+the "up to 250 free online entries per week" figure that started this
+whole phase turned out to be a mix-up — the real T&Cs say "**PHONE**
+Entrants can enter ... up to 250 times in total by calling [number] ...
+Calls (from the UK) are charged at standard network rate." It was never a
+web-form limit; it's the phone route's own cap, confirmed via a second
+real API call (`GET /campaign/info/{tag}`, its `body` field is the full
+T&Cs HTML) discovered by capturing the actual network request the
+campaign *detail* page makes (same Playwright-network-capture technique
+already used to find `campaign/page/HOME` itself).
+
+Extended `bauer_makemeawinner.py`: `fetch_campaign_info()` (a second,
+per-campaign API call) plus `extract_phone_channel()`/
+`extract_post_channel()`, using the same "standard network rate = free
+but never automated" convention already established in talksport.py/
+radioexe.py, and the same "PO Box + postcode = free postal route"
+convention as talksport.py's own POST handling. Two real phrasing
+variants were found and both handled (`"POST Entrants can also enter..."`
+vs. `"POST Postal entries must be received... Entrants can enter the
+Competition by sending..."`) — caught by testing against every real
+campaign in production, not just the first one checked; an initial 400-
+character capture window also proved too narrow for the phone case (cut
+off before "standard network rate" appeared across a long list of
+alternate numbers) and was widened to 800 after finding this live. 3 of
+15 real campaigns still show no phone/post channel — confirmed these are
+genuinely different campaign shapes (`type: EXTERNAL`/`EMBEDDED`,
+redirecting to a sub-page or a third-party widget vendor, with an empty
+placeholder T&Cs body) rather than a missed regex case.
+
+**Backfilled the 15 promotions already in production** (a fresh discovery
+run alone wouldn't add these — `ingest()` skips anything it already knows
+by dedup hash, channels included) via a new one-off
+`backfill_bauer_phone_post_channels.py`: 12 real channels added (2 phone,
+10 post) across the existing 15 Bauer promotions, confirmed in the real
+stored data (`post` 3→13, `phone_entry` 6→8).
+
+**A third recurrence of the ADC-overwrite gotcha**, hit while running the
+backfill against real GCS data: this time the clobbering identity was a
+work service account (`dbol-elt-runner@dbol-prod.iam.gserviceaccount.com`),
+not an impersonated one like the last two times — same root cause
+(NatureMetrics day-job gcloud usage overwriting the single global ADC
+file), same fix (`gcloud auth application-default login
+--configuration=radio-comp`, done by the user). Worth restating since it
+keeps recurring in slightly different shapes: check the ADC file's `type`
+field first on any unexplained GCS/Firestore permission error in this
+project, before assuming a real permissions regression.
+
+## 2026-09-09/10 — Pivoted to local stations; found the wrong 13, then the right 4; nothing live yet
+
+Asked directly: given phone automation is a hard no (see below), where
+else can the model expand to find more automatable competitions? Every
+major-network source built so far (talkSPORT, Bauer) turned up a
+monetized third-party platform with no genuinely free web form — the
+user's own conclusion was to pivot to the local/independent tier, per the
+original scoping research's own view that it's the better-EV target.
+
+**A real, live win found, then found inapplicable**: Central FM's "Wake
+Up & Cash In" (`centralfm.co.uk/win/wake-up-and-cash-in/`) is a genuine,
+live, plain native HTML `<form>` — real `<input>` fields (Name, Email,
+City, Post Code, Phone, plus an open "tell us about yourself" field),
+`action="/_form_submit"`, no third-party platform, no cost/premium
+language anywhere, "Powered by Aiir" in the footer. This is the exact
+"Aiir CMS" pattern already referenced in `radioexe.py`'s own docstring —
+now confirmed live on 3 stations (Central FM, Manx Radio, KMFM), a
+genuinely reusable free-form pattern distinct from every monetized
+platform found so far. But Central FM's own T&Cs require Forth Valley
+(Scotland) residency, and the user's real postcode is SE5 (Camberwell,
+South-East London) — confirmed by asking directly rather than assuming.
+None of the 13 stations in `seed_local_independent.py` were ever checked
+against where the user actually lives; they were a scattered Phase-0
+sample. This is a structural issue for hyper-local commercial radio
+generally (it exists to serve, and be paid to serve, a specific small
+catchment), not a Central-FM-specific quirk — also confirmed live by
+finding no residency language on the other survey candidates checked, but
+this is the first time it's been checked at all.
+
+**Re-targeted at genuine SE-London coverage**: verified 4 real, currently
+operating, Ofcom-licensed stations covering Southwark/Camberwell — Select
+Radio, Rainbow Radio (a pure client-rendered SPA, unlike the others —
+would need Playwright if it ever gets a real competition), Mi-Soul,
+Resonance FM. A fifth candidate, First Love Radio, is confirmed defunct
+since April 2009 and excluded. Honest result: **none of the 4 currently
+has a live, free competition** (Mi-Soul's only current prize mechanism is
+a paid VIP-ticket raffle bundled into concert tickets). This project's own
+established rule — build a classifier against a real captured example,
+never speculative parsing logic — meant there was nothing to build a
+proper adapter against yet.
+
+**Built instead**: `seed_southeast_london.py` (the 4 real stations, same
+shape as the original seed file) and a new, deliberately minimal
+`stations/watch_for_competitions.py` — no `Promotion`/`EntryChannel`
+records, just "has a Win/Competitions-looking nav link appeared on this
+homepage since last time?", with a tiny `{station: last_seen_url}` JSON
+state file (same per-backend branching as `user_profile_store.py`) so it
+only ever notifies once per newly-appeared link, never repeats. Folded
+into `run_discovery.py`'s existing hourly pass (4 extra plain GETs,
+negligible cost) rather than new scheduled infrastructure, same reasoning
+`outcomes/reminder.py` already used. Verified for real: a live discovery
+run correctly logged `"Competition watcher: checked 4 station(s), 0 new
+link(s) found"` — confirmed running, not silently failing (the first
+version only logged when something was found, making a silent success
+indistinguishable from a silently-swallowed exception; fixed to always
+log a summary line, matching every adapter's own convention).
+
+**Separately, the user asked whether the free phone-line route (found
+during the Bauer bug fix) could be automated "in bulk," reasoning that
+standard-rate calls are covered by their own phone allowance.** Declined
+directly — this isn't really a cost question: Ofcom's civil
+"persistent misuse" regime doesn't turn on who pays for the call, station
+T&Cs explicitly ban bulk/automated entries with disqualification as the
+stated consequence, and a placed phone call has no draft/undo step the
+way a web-form submission does. Reaffirmed CLAUDE.md's phone-automation
+ban as still correct and not worth relaxing, rather than build toward it
+by increments.
+
+**Outstanding**: this is genuinely a "wait and see" tool — real
+verification is whether it actually catches the next competition one of
+these 4 stations runs. Worth reconsidering the rest of the original 13
+`seed_local_independent.py` stations the same way (checked against actual
+user geography) if this SE-London-specific approach doesn't pan out.
+
+## 2026-09-10 — A strategic reckoning: the automation bet hasn't paid off, and probably won't
+
+Asked directly whether we'd reached a natural limit of the current
+methodology. Answered honestly rather than optimistically, using the full
+weight of real data gathered this session: across every single source
+built or investigated — talkSPORT (7 ambiguous, mostly resolved paid),
+Radio Exe (rare, mostly paid), Bauer (15 campaigns, all currently paid),
+Heart (dropped on safety grounds), 17 local/independent stations across
+two geographic passes (mostly no live competitions, or on-air/social-
+media/physical-only entry) — **zero genuinely free, automatable web-form
+entries have ever been found in real production data.** The
+entry-execution engine (draft/approve/submit, LLM field mapping,
+Playwright automation) has been built, deployed, and mechanically proven
+against a fixture, but has never once fired for a real competition,
+because nothing has ever qualified.
+
+**Conclusion, stated plainly rather than papered over**: this isn't bad
+luck or insufficient searching. Every genuine free route actually found
+this session (Bauer's phone line, postal addresses, Central FM's
+on-air-callback form) carries a built-in friction cost — a phone call, a
+stamp, being awake at a fixed time — that a pure web form doesn't. That
+friction very plausibly *is* the compliant "free alternative" doing its
+intended job (Gambling Act equal-cost, anti-bulk-entry T&Cs): a
+frictionless, instantly-automatable free web form would be trivially
+farmable, so it looks like stations mostly don't offer one. The system's
+actual proven value this whole session has been **discovery and
+visibility**, not automation — the Bauer phone-line find is the human-
+in-the-loop design working exactly as specced, just via a manual call
+rather than an automated submission.
+
+**Two directions agreed, in place of continuing to hunt for the one
+source where automation finally pays off**:
+1. Make the manual step easier, without automating it.
+2. Keep expanding discovery sources for volume of visibility, accepting
+   the automation ceiling as real rather than a temporary gap.
+
+**Direction 1, built and deployed today**: a real, concrete gap in
+`formatting.py`'s `format_channel_line()` — every adapter has been
+storing the actual contact info for phone/post/SMS/email/WhatsApp
+channels (`channel_url_or_number`) since early in the project, but the
+shared formatter never actually displayed it. The user found their one
+genuine free route (Bauer's phone line) only by clicking through to the
+source page themselves; the notification itself never showed the number.
+Fixed: `PHONE_ENTRY`/`ON_AIR_CALL_IN`/`POST`/`SMS`/`EMAIL`/`WHATSAPP`
+channels now show their actual number/address/inbox directly in both the
+Telegram notification and `view_promotions.py`'s CLI output (`WEB_FORM`
+deliberately excluded — its `channel_url_or_number` duplicates the
+promotion's own `source_url`, already shown separately). Telegram
+auto-links plain phone-number-shaped text client-side regardless of
+`parse_mode` (the same mechanism this codebase already relies on for
+`source_url` links) — so this gets tap-to-call for free, no HTML/Markdown
+formatting needed, consistent with `telegram_client.py`'s permanent
+"plain text only" design. Rebuilt/redeployed `radio-comp-discovery`.
+
+**Direction 2**: no new source built today — the standing next step,
+whenever pursued, is the same geography-first approach direction 1's
+sibling entry used (check real user location before picking a station),
+plus reconsidering `MoneySavingExpert` (in the original spec, never
+built) and the still-unexplored `xd.wayin.com` platform (seen twice now —
+once via Bauer's own `STARTUPBUNDLE` redirect, once via KMFM's "kitchen
+upgrade" competition — a possible third shared white-label platform,
+unverified whether it has a clean API like winhappy.com or is
+monetized-only like every other platform found so far).
+
+## 2026-09-11 — `xd.wayin.com` ("Grow by Zeta") adapter built (Part 1 of the wayin/Heart plan)
+
+Built `src/radiocomp/stations/wayin.py`, following the standard adapter
+skeleton unchanged (pure `fetch()`/`parse_detail()`, `ingest()` doing all
+I/O + storage, `existing_hashes`/`dedup.promotion_dedup_hash` cross-run
+dedup, per-item `try/except httpx.HTTPError` → `logger.warning` →
+`continue`, the same `"<Source> ingestion: %d listed, %d new promotions,
+%d entry channels recorded"` summary line). Registered in
+`run_discovery.py`'s `_load_adapters()`.
+
+wayin.com has no enumerable campaign index of its own, so this adapter
+discovers campaigns by scanning a small seed list of *other* pages known
+to link out to one (`_SEED_LINK_SOURCES`) — same "seed manually, expand
+over time" convention as `seed_local_independent.py`/
+`seed_southeast_london.py`, applied to linking pages instead of stations.
+
+**Re-confirming the two real examples live, per CLAUDE.md's "never guess
+a URL" rule, turned up a real surprise**: the plan's original Bauer
+`STARTUPBUNDLE` example had expired, and its current successor on Hits
+Radio's own site now embeds via a *different* platform entirely
+(`display.engagesciences.com`, not wayin.com) — so the actual live Bauer
+example used instead is a different, currently-live campaign found via
+the same search approach: a shared Tesco Clubcard competition
+(`hellorayo.co.uk/hits-radio/competitions/win/tesco-clubcard-september-26-sponsored`
+→ `x.wayin.com/display/container/dc/49fbb4f2-.../details`). KMFM's
+"kitchen upgrade" example (`kmfm.co.uk/win/` →
+`xd.wayin.com/display/container/dc/07806756-.../details`, a
+Gousto-sponsored prize) was still live and used as-is.
+
+**A second real surprise, more consequential for the design**: KMFM's
+linking page has a plain `<a href="https://xd.wayin.com/...">` link,
+exactly matching the plan's assumed shape (and
+`watch_for_competitions.check_for_competition_link`'s own `<a href>`-scan
+pattern). But Hits Radio's own site (`hellorayo.co.uk`) is a
+client-rendered Next.js app — its wayin.com URL is never a real `<a
+href>` at all, only a string value buried inside the page's embedded
+`__NEXT_DATA__` JSON (an `"embeds"` field with `"provider": "wayin"`),
+rendered into a widget client-side. Confirmed by testing, not assumed:
+the plan's originally-sketched `<a href>`-only scan finds nothing at all
+on this real page. `find_wayin_links()` therefore scans two ways — a
+normal BeautifulSoup `<a href>` scan, plus a plain regex scan of the raw
+page text for any `wayin.com`-containing URL substring — to catch both
+real shapes.
+
+Both real wayin.com campaign pages turned out to be plain,
+server-rendered HTML — a plain `httpx` GET returns the full real content
+(title, prize copy, entry period, and T&Cs when present), no Playwright
+needed, confirmed empirically for both.
+
+**Free/paid classification, kept fully conservative per CLAUDE.md**: only
+one of the two real campaigns says anything explicit about entry cost at
+all. KMFM's Gousto campaign states, in its own T&Cs, "Online entry is
+free of charge." verbatim — a confident real signal, so its `WEB_FORM`
+channel classifies as `is_free_route=True`. The Tesco Clubcard campaign's
+page has no T&Cs/rules content in its static HTML at all and no cost
+language anywhere in what *is* there, so it correctly comes back
+`is_free_route=None, review_recommended=True` rather than inferring
+"free" just because its entry form has no payment fields. No real *paid*
+wayin.com campaign has been seen yet to build a paid-signal pattern
+against — same "extend the classifier only once a real gap is found"
+posture as `bauer_makemeawinner.py`'s own phone/post extraction history.
+
+**A related real finding, worth recording explicitly**: KMFM is actually
+owned by KM Media Group, not Bauer — but the Gousto campaign's own real
+T&Cs describe it as a shared Bauer-network competition in its own words
+("Anyone who has won a Bauer competition ... on any Bauer Radio Brand,
+will not be eligible ..."), and list "KMFM Group" alongside dozens of
+Bauer/Hits Radio Network station brands sharing the identical prize pool.
+So `network="Bauer"` is used for the KMFM seed entry too — confirmed
+empirically from the campaign's own T&Cs, not assumed from KMFM's own
+on-air branding — so `compliance/engine.py`'s existing
+`SHARED_LIMIT_NETWORKS["Bauer"]` cross-brand entry-limit check applies to
+it correctly with no engine change needed.
+
+Prize value stays `None` for both real campaigns (a travel-and-dining
+package and a kitchen-goods bundle, neither with a single £ figure) — no
+speculative extraction added for a field that isn't actually present on
+this platform yet.
+
+Real captured fixtures: `tests/fixtures/wayin_kmfm_linking_page.html`,
+`wayin_bauer_linking_page.html`, `wayin_kmfm_gousto_campaign_page.html`,
+`wayin_bauer_tesco_campaign_page.html`. `tests/test_wayin.py` (12 tests)
+covers link-finding on both real shapes, parsing on both real campaigns
+(one confidently free, one correctly ambiguous), and safe degradation on
+malformed/missing/title-less HTML. Full suite: 152 passed, 1 skipped
+(pre-existing, unrelated). Verified end-to-end against the real live
+sources with `STORAGE_BACKEND=local`: `python -m radiocomp.stations.wayin`
+found both real campaigns correctly (`wayin.com ingestion: 2 listed, 2
+new promotions, 2 entry channels recorded`), a second run correctly
+deduped to 0 new, and a full `run_discovery.py` pass with all 5 adapters
+registered completed with 0 failures.
+
+Part 2 of the same plan (Heart/Global Player, requiring a real personal
+Gigya-SSO login) is separate, out of scope for this adapter, and not
+touched here.
+
+## 2026-09-23 — Part 2 of the same plan: Heart/Global, and it needed no login after all
+
+Heart was dropped back on 2026-09-09 after `comp.heart.co.uk` (one of
+Heart's off-page entry subdomains) showed a misleading "successfully
+entered" state when read anonymously, on the assumption that reaching
+real, trustworthy free/paid status meant taking on a genuine personal
+login to Global's Gigya SSO — a materially bigger credential category
+this project hadn't taken on before. Revisiting it now, a deeper look
+found the platform that actually matters for discovery is a different
+one: **`winplus.heart.co.uk`**, Global's own first-party "Global WIN"
+competition platform, shared network-wide across Heart/Capital/Classic
+FM/Gold/LBC/Radio X/Smooth via per-brand instances
+(`winplus.capitalfm.com`, `winplus.classicfm.com`, etc.) — the same
+"one adapter, several stations" shape as `bauer_makemeawinner.py`.
+
+**The good surprise, re-confirmed live rather than trusted from ~2-week-old
+research**: a real competition page there, fetched with no login attempted
+at any point, plainly shows both `"FREE ENTRY: No purchase necessary."`
+and `"Paid entry from £X..."` text on the same page (verified across 5
+real live competitions via Playwright, with the same "check the network
+requests, not just the rendered text" discipline as the original
+`comp.heart.co.uk` incident — only routine analytics/consent/Stripe-config
+calls occurred, nothing resembling a submission). The "Sign in with your
+global iD" step shown on the page is needed to actually *submit* an
+entry, never to *read* its free/paid status. So, unlike the original
+plan, **`heart_global.py`'s discovery/`ingest()` needs no credentials and
+no login at all** — same posture as every other adapter in this codebase.
+
+**A second, bigger surprise, found by not stopping at the first
+confirmation**: `winplus.heart.co.uk` itself is a pure client-rendered
+Vue SPA (a plain `httpx` GET of any page returns only an empty `id="app"`
+shell) — but Playwright's own network-request log, captured during the
+same safe no-login page loads, showed the real rendered content comes
+from a clean, unauthenticated-by-design JSON API served from the same
+origin (`/data/init.json`, `/data/competitions/list.json`,
+`/data/competitions/{id}/details.json`), confirmed afterwards to work via
+plain `httpx` alone. Same discovery shape as `bauer_makemeawinner.py`'s
+own `api.winhappy.com` (found via Playwright network capture, then
+confirmed to need no Playwright at all), and a second first for this
+codebase alongside Bauer's: `competitionEntryType` (`"free"`/`"paid"`) is
+a genuine field straight from Global's own backend, not a regex/keyword
+guess against scraped text — confidently classified in both directions,
+never `review_recommended` unless the field is missing or unrecognised.
+The brand id used to filter Heart's own competitions out of the shared
+list (`"heart"` → `2`) is resolved live from `init.json` every run rather
+than hardcoded, on the same "never guess a value, even a stable-looking
+one" posture as everything else here.
+
+Real data at capture time: 10 competitions live on Heart's own homepage,
+2 confidently `free` (ticket giveaways), the rest confidently `paid`.
+Every real paid competition has exactly one genuine free "no purchase
+necessary" alternative described only in its own T&Cs body — never both,
+never neither, an identical shape to `bauer_makemeawinner.py`'s own real
+gap (a paid `WEB_FORM` campaign with a free phone/post alternative the
+summary listing never mentions). Two ("Win £10,000", "Cash Call") use a
+free phone route; every other paid competition instead uses a free
+postal route to the same real PO Box (`PO Box 8669, Derby, DE1 9SR`).
+**Tracked for visibility only, per CLAUDE.md — a phone channel is never
+auto-dialled, full stop** — the real T&Cs text independently makes the
+same point ("We reserve the right to withhold any prize from you if we
+believe that you are using automated dialling technology...").
+
+**`login()` — built, deliberately not wired into `ingest()` or
+`run_discovery.py` anywhere.** The user has separately signed off on
+setting up real personal Global Player credential handling now, for
+*future* entry-submission work only — accepting the real risk that a
+genuine Global Player account could be suspended if Global's own
+anti-automation detection ever flags it, a materially bigger risk
+category than anything else in this system, taken on deliberately and
+explicitly rather than incidentally. Confirmed live, passively (reading
+Global's own already-loaded JS and the requests it makes on its own,
+never an actual login attempt): the real login call is Gigya's own
+standard REST endpoint (`POST accounts.eu1.gigya.com/accounts.login`)
+with Global Player's public client-side Gigya `apiKey`, `loginID`,
+`password`, and `sessionExpiration=0` (session-only — fresh login every
+run, nothing persisted, matching Bauer's own guest-token pattern); a
+successful response carries Gigya's standard `UID`/`UIDSignature`/
+`signatureTimestamp` fields, from which Global's own JS derives an
+app-specific bearer token (`base64(json({gigyaUID, timestamp,
+signature}))`) used on later calls to Global's backend. `login()`
+implements exactly this and returns the derived token for the caller to
+hold in memory for that run only — never persisted anywhere. It was
+never actually exercised against the live site while building this (no
+real `GLOBAL_PLAYER_EMAIL`/`GLOBAL_PLAYER_PASSWORD` exist yet, and this
+project never invents or requests real credentials) — a real gap left
+for the user to close themselves once they've created the actual
+secrets, the same division of labour as every other credential in this
+project (Secret Manager secrets are created and bound by the user, never
+typed in by this project). `GLOBAL_PLAYER_EMAIL`/`GLOBAL_PLAYER_PASSWORD`
+were added to `config.py` and `.env.example` following the exact
+`TELEGRAM_BOT_TOKEN` convention, both left blank.
+
+Real captured fixtures: `tests/fixtures/heart_global_init.json`,
+`heart_global_competitions_list.json`, and three real
+`heart_global_competition_details_*.json` files (one paid-with-phone-route,
+one paid-with-post-route, one free). `tests/test_heart_global.py` (20
+tests) covers brand-id resolution, listing/detail fetch, `parse_detail`
+against all three real shapes, the conservative "unrecognised
+`competitionEntryType` stays ambiguous" path, `ingest()`'s graceful
+degradation when the brand id can't be resolved, and `login()`'s
+credential-gate/request-construction/error-handling against a mocked
+Gigya response — no real network call, no real credentials, anywhere in
+the test suite. Full suite: 172 passed, 1 skipped (pre-existing,
+unrelated). Verified end-to-end against the real live site with
+`STORAGE_BACKEND=local`: `python -m radiocomp.stations.heart_global`
+found 14 real live Heart competitions correctly (`Heart/Global Win
+ingestion: 14 listed, 14 new promotions, 25 entry channels recorded`), a
+second run correctly deduped to 0 new, and a full `run_discovery.py` pass
+with all 6 adapters registered (`heart_global` now included) completed
+with 0 failures.
