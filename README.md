@@ -788,6 +788,70 @@ would break this project's "never infer what isn't really there" rule.
 
 Full suite: 182 passed, 1 skipped.
 
+## Update — Global WIN entry-execution: real authenticated draft/submit
+
+A live investigation found why the entry-execution engine couldn't act on
+any real, confidently-free Global WIN channel yet, precisely: zero
+`<form>`/`<input>` elements exist anywhere in the DOM on a real competition
+page until *after* "Step 1: Sign in with your global iD" completes — there
+is no anonymous entry form at all, signing in is the entry mechanism
+itself. A direct `goto()` to a competition's deep-link URL also reliably
+crashes Global's own frontend JS on a cold load (a real bug in their SPA);
+loading the relevant brand homepage first and clicking through in-app
+loads the same page with zero errors.
+
+New module, `entry_execution/global_win_auth.py`: `sign_in(page)` drives
+the *real* Global Player sign-in form (`globalplayer.com/signin/`,
+`#email`/`#password`, confirmed live) rather than reusing
+`global_win.py`'s existing REST-only `login()` — driving the real form
+lets Global's own JS set whatever session state each winplus subdomain's
+frontend actually checks. `_resolve_homepage_for_competition()` maps a
+competition's own `brands` array (from `/data/competitions/list.json`)
+plus `/data/init.json`'s brand-code map to the one real winplus homepage
+that features it (confirmed live that the generic `winplus.co.uk`
+homepage does *not* list every competition — brand tagging genuinely
+gates which homepage can reach a given one).
+`open_authenticated_page()` launches, signs in, navigates to that
+resolved homepage, dismisses consent, and clicks through to the target
+competition by its numeric id — never a bare `goto()` of the deep link.
+
+The Sourcepoint consent-dismiss idiom (`iframe[id^="sp_message_iframe"]`
++ "Accept") moved out of `stations/talksport_widget.py` into a shared
+`browser.dismiss_consent_banner()`, now also used by the existing
+anonymous `browser.open_page()` — a small, generically useful improvement
+on its own, and confirmed live that globalplayer.com's own consent modal
+uses the identical markup.
+
+`draft.py`/`submit.py` route by `promo.station_name_raw ==
+global_win.STATION_NAME`: a Global WIN channel goes through
+`global_win_auth.open_authenticated_page`, everything else through the
+existing `browser.open_page`. With no `GLOBAL_PLAYER_EMAIL`/
+`GLOBAL_PLAYER_PASSWORD` configured, both fail closed immediately
+(`EntryStatus.FAILED`, a clear `submission_error`) rather than attempting
+anything.
+
+**What was verified live** (2026-09-28, passively — page loads, DOM
+inspection, no form ever submitted): the sign-in page's consent modal and
+`#email`/`#password`/submit-button selectors; the homepage-click-through
+mechanism, on both a brand-specific homepage (`winplus.radiox.co.uk`) and
+the generic one (`winplus.co.uk`), against real live competitions, with
+zero JS errors and full form content loaded after the click-through; that
+`winplus.co.uk`'s own homepage genuinely doesn't list a competition tagged
+only with other brands (proving per-competition homepage resolution is
+necessary, not just a nice-to-have); and that every real winplus brand
+subdomain in `_BRAND_CODE_TO_HOMEPAGE` resolves with a 200. **What remains
+genuinely unverified**: the real sign-in submission itself (nothing was
+ever typed into the form or submitted — `GLOBAL_PLAYER_EMAIL`/
+`GLOBAL_PLAYER_PASSWORD` are deliberately not bound anywhere this
+environment can reach) and, downstream of that, whether the resulting
+session is actually recognised as signed-in by a winplus subdomain's own
+frontend. Both are for the user's own first real run, once the two
+Secret Manager secrets are bound to the `radio-comp-entry-execution` Cloud
+Run Job.
+
+Full suite: 194 passed, 1 skipped (pre-existing, unrelated — the live
+Gemini mapping test).
+
 ## Next steps (not built yet)
 
 Nothing from the original spec's core phases remains unbuilt. Open items

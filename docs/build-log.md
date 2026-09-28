@@ -1855,3 +1855,139 @@ stored, and ordinary (non-recurring) promotions are unaffected.
 `tests/test_notify_message.py` (+2): the recurring note appears only when
 `recurrence_series_id` is set. Full suite: 182 passed, 1 skipped
 (pre-existing, unrelated).
+
+## 2026-09-28 — Global WIN entry-execution: real authenticated draft/submit
+
+Followed up on why the entry-execution engine had never actually acted on
+a real, confidently-free Global WIN channel: a live investigation found
+zero `<form>`/`<input>` elements exist anywhere in a real competition
+page's DOM until *after* "Step 1: Sign in with your global iD" completes.
+There's no anonymous entry form at all on this platform — signing in
+*is* the entry mechanism, not a UI nicety on top of one. Separately, a
+direct `page.goto()` to a competition's own deep-link URL (exactly what
+`entry_execution/browser.py`'s `open_page()` does for every other
+station) reliably crashes Global's own frontend JS on a cold load —
+`TypeError: Cannot read properties of null (reading 'prize')` in their
+own `competition-view-*.js`, a real bug in their SPA, not ours. Loading
+the competition's own brand homepage first and clicking through in-app
+(organic SPA navigation, no deep link) loads the identical page with zero
+JS errors.
+
+The user explicitly signed off on wiring in real Global Player
+credentials for this — a materially bigger step than anything built so
+far, accepting the real account-suspension risk already discussed
+(Global's own T&Cs permit disabling any account they believe is
+automated). `config.GLOBAL_PLAYER_EMAIL`/`GLOBAL_PLAYER_PASSWORD` are
+real Secret Manager secrets that already exist but are deliberately not
+bound anywhere this environment can reach — nothing here could have
+attempted a real login even if it tried to.
+
+**New module**, `entry_execution/global_win_auth.py`:
+- `sign_in(page)` drives the *real* sign-in form at
+  `https://www.globalplayer.com/signin/` (`#email`/`#password`, a
+  `rememberMe` checkbox, `button[type="submit"]` labelled "Sign In" — all
+  confirmed live, passively: page loaded, consent dismissed, fields
+  inspected, nothing ever typed or submitted), rather than reusing
+  `stations/global_win.py`'s existing `login()` (a REST-only Gigya call
+  that returns a bearer token for Global's own BFF API but never touches
+  the Playwright browser's own cookie jar, so it can't make a *page*
+  appear signed in). Driving the real form lets Global's own JS set
+  whatever real session state each winplus subdomain's own frontend
+  actually checks for, rather than reverse-engineering that cross-domain
+  SSO handshake ourselves. Raises `RuntimeError` immediately, before any
+  navigation, if either env var is unset (same inline-truthiness idiom
+  `global_win.py:519`'s own `login()` already uses). Verifies the login
+  actually succeeded — the URL moving away from `/signin/` within a
+  bounded wait — before returning; never assumes success, and on a
+  timeout raises with whatever text is visible in the form at that point
+  (best-effort, since the real error-message markup was never observed —
+  Global only renders it after a real failed submit, which this codebase
+  must never trigger just to go looking for it).
+- `_resolve_homepage_for_competition(client, comp_id)` reads a
+  competition's own `brands` array (from
+  `/data/competitions/list.json`) plus `/data/init.json`'s brand-code map
+  to find which real `winplus.<brand>` homepage actually features it.
+  Confirmed live (2026-09-28) that this genuinely matters, not just a
+  nice-to-have: `https://www.winplus.co.uk/` (the platform's own generic
+  "winplus" brand, id 9) does **not** list competition 13771 ("Win Two
+  Tickets to See Manic Street Preachers and Suede", tagged `brands: [67,
+  6]`) at all, while `https://winplus.radiox.co.uk/` does. The real
+  brand-code → domain map (`_BRAND_CODE_TO_HOMEPAGE`) comes straight off
+  the real T&Cs text already captured in
+  `tests/fixtures/global_win_competition_details_13771_non_heart_brand.json`
+  — every domain in it was separately confirmed live to resolve with a
+  200 (plain `httpx`, following redirects), including the one genuine
+  quirk found along the way: Gold Radio's winplus domain
+  (`winplus.goldradiouk.com`) is **not** the same domain as its own main
+  site (`goldradio.com`, per `init.json`'s own
+  `brands.goldradio.meta.link`). `rivieraradio` (id 100, `brandRegion:
+  "world"`) is deliberately left unmapped — it's not in the real T&Cs
+  platform list, and no real competition observed so far is tagged with
+  it alone; a competition that ever is fails closed (raises) rather than
+  guessing a homepage for it.
+- `open_authenticated_page(url)` — same shape as `browser.open_page()`:
+  launch, `sign_in(page)`, resolve and navigate to the target
+  competition's brand homepage, dismiss consent, click through to the
+  competition by its numeric id (`a[href*="/competition/<id>/"]` —
+  confirmed live this is exactly the real anchor shape both a
+  brand-specific and the generic homepage render), then yield the page.
+  Never falls back to a bare `goto()` of the target URL — raises instead
+  if no matching click-through link is found on the resolved homepage.
+
+**Shared consent-dismiss helper**: moved the proven Sourcepoint idiom
+(`iframe[id^="sp_message_iframe"]` + substring-matched "Accept", wrapped
+in `try/except: pass`) out of `stations/talksport_widget.py`'s own inline
+copy into `entry_execution/browser.dismiss_consent_banner()`, now called
+unconditionally from the existing anonymous `open_page()` too (a small,
+generically useful improvement on its own) as well as from
+`global_win_auth.py`. Confirmed live that globalplayer.com/signin/'s own
+consent modal uses the identical markup, so the same idiom works there
+verbatim with no adaptation needed.
+
+**Routing**: `draft.py`/`submit.py` both now pick
+`global_win_auth.open_authenticated_page` over `browser.open_page` when
+`promo.station_name_raw == global_win.STATION_NAME` — the same
+`station_name_raw` equality idiom `backfill_global_win_recurrence.py`
+already established, now used in the live execution path for the first
+time, not just one-off maintenance. Fresh sign-in per channel, no session
+reuse across channels in one run, matching this codebase's "nothing
+persisted, fresh every time" posture elsewhere (Bauer's guest token,
+`global_win.py`'s own `login()`) and the job's real observed volume
+(rarely more than one Global WIN channel per run). With
+`GLOBAL_PLAYER_EMAIL`/`PASSWORD` unset, both fail closed immediately
+(`EntryStatus.FAILED`, `submission_error="GLOBAL_PLAYER_EMAIL/PASSWORD
+not set"`) before ever opening a browser — same shape as `draft.py`'s
+existing "no UserProfile configured" hard-stop.
+
+**Tests**: `tests/test_global_win_auth.py` — `extract_competition_id()`
+and `_resolve_homepage_for_competition()` against the real
+`heart_global_init.json`/`heart_global_competitions_list.json` fixtures
+plus a couple of synthetic listings (a competition tagged with only one
+known brand, one tagged only with the unmapped `rivieraradio`, one id not
+in the listing at all) via a fake client, no live network call — same
+convention as `test_global_win.py`'s own `_FakeClient`.
+`tests/test_entry_execution_routing.py` (new) — `draft_one()`/
+`submit_one()` pick the right opener for a Global WIN vs. non-Global-WIN
+promotion (both openers faked as no-op context managers, `extract_form_fields`/
+`click_submit` stubbed so no real page object is ever needed), plus the
+credential-unset FAILED-status path for both, asserting the opener is
+never even called in that case. `sign_in()`/`open_authenticated_page()`/
+the click-through mechanics have no offline unit test, matching
+`talksport_widget.py`'s own precedent (its live-fetch functions aren't
+unit-tested either) — verified live instead, as detailed above. Full
+suite: 194 passed, 1 skipped (pre-existing, unrelated — the live Gemini
+mapping test), zero real network calls or credentials anywhere in the run.
+
+**What remains genuinely unverified until a real login happens**: the
+actual sign-in submission (email/password were never typed into the real
+form — no credentials exist anywhere this environment can reach) and,
+downstream of that, whether a winplus subdomain's own frontend actually
+recognises the resulting session as signed in, whether the real entry
+form's fields extract and fill sensibly once past sign-in, and whether a
+real submission produces a genuine confirmation state. That first real
+attempt is deliberately the user's own action — triggered and watched
+directly (a local run with real env vars, or `gcloud run jobs execute`),
+once the two already-created Secret Manager secrets
+(`global-player-email`/`global-player-password`) are bound to the
+`radio-comp-entry-execution` Cloud Run Job (not done as part of this
+work — an infra step for the user to run separately).

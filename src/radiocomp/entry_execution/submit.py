@@ -24,10 +24,12 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-from ..models import EntryRecord, EntryStatus, Promotion, EntryChannel
+from .. import config
+from ..models import EntryChannel, EntryRecord, EntryStatus, Promotion
+from ..stations import global_win
 from ..storage.base import get_repository
 from ..storage.user_profile_store import load_user_profile
-from . import browser, notify_draft, screenshots
+from . import browser, global_win_auth, notify_draft, screenshots
 from .fill_plan import FormMapping, build_fill_actions
 
 logger = logging.getLogger(__name__)
@@ -56,6 +58,25 @@ def submit_one(record: EntryRecord) -> EntryRecord:
         entry_repo.upsert(record)
         return record
 
+    is_global_win = promo.station_name_raw == global_win.STATION_NAME
+    if is_global_win and not (config.GLOBAL_PLAYER_EMAIL and config.GLOBAL_PLAYER_PASSWORD):
+        # Same hard-stop as draft.py's own routing branch — see there for
+        # why. A draft can only have reached APPROVED (and so be
+        # submittable at all) if drafting itself already succeeded with
+        # real credentials configured, but this is checked again here
+        # independently rather than assumed, since submit.py always
+        # re-navigates fresh (see module docstring) and never trusts state
+        # left over from the draft pass.
+        record.status = EntryStatus.FAILED
+        record.submission_error = "GLOBAL_PLAYER_EMAIL/PASSWORD not set"
+        entry_repo.upsert(record)
+        logger.error(
+            "EntryRecord %s is a Global WIN channel but GLOBAL_PLAYER_EMAIL/PASSWORD are unset, refusing to submit",
+            record.id,
+        )
+        notify_draft.send_submission_result(promo, record)
+        return record
+
     profile = load_user_profile()
     if profile is None:
         record.status = EntryStatus.FAILED
@@ -66,8 +87,9 @@ def submit_one(record: EntryRecord) -> EntryRecord:
     mapping = FormMapping.model_validate(record.fill_plan)
     actions = build_fill_actions(mapping, profile)
     url = channel.channel_url_or_number or promo.source_url
+    opener = global_win_auth.open_authenticated_page if is_global_win else browser.open_page
 
-    with browser.open_page(url) as page:
+    with opener(url) as page:
         # Re-tag the freshly-navigated page — see module docstring for why
         # this, not a raw check against an untagged page, is the actual
         # safety mechanism.

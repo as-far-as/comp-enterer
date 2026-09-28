@@ -25,6 +25,29 @@ from .. import config
 
 _SKIP_INPUT_TYPES = {"hidden", "submit", "button", "reset", "image", "file"}
 
+# The Sourcepoint cookie-consent idiom, confirmed working verbatim on both
+# win.talksport.com (originally in stations/talksport_widget.py) and
+# globalplayer.com/winplus.* (entry_execution/global_win_auth.py) — moved
+# here so both can share one implementation rather than each keeping its
+# own inline copy. Best-effort and silent: a page with no matching modal
+# (or one whose modal doesn't match this markup) is a safe no-op, never an
+# error — dismiss_consent_banner() is called unconditionally by open_page()
+# below, on pages that may or may not have any consent modal at all.
+_CONSENT_IFRAME_SELECTOR = 'iframe[id^="sp_message_iframe"]'
+
+
+def dismiss_consent_banner(page, timeout: int = 5000) -> None:
+    """Best-effort dismiss of a Sourcepoint cookie-consent modal, if one is
+    present. Never raises — a page without a matching modal (or one that
+    doesn't appear within `timeout`) is left exactly as it was."""
+    try:
+        page.frame_locator(_CONSENT_IFRAME_SELECTOR).get_by_role("button", name="Accept").first.click(
+            timeout=timeout
+        )
+        page.wait_for_timeout(1000)
+    except Exception:
+        pass  # no consent modal this time, or it didn't match — proceed regardless
+
 
 @contextmanager
 def open_page(url: str):
@@ -35,6 +58,7 @@ def open_page(url: str):
         page = browser.new_page(user_agent=config.USER_AGENT)
         try:
             page.goto(url, timeout=30000)
+            dismiss_consent_banner(page)
             yield page
         finally:
             browser.close()

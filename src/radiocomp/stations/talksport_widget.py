@@ -53,7 +53,6 @@ from ..models import EntryChannel
 
 logger = logging.getLogger(__name__)
 
-_CONSENT_IFRAME_SELECTOR = 'iframe[id^="sp_message_iframe"]'
 _WIDGET_IFRAME_SELECTOR = "iframe.authenticated-iframe"
 _WIDGET_DOMAIN_HINT = "win.talksport.com"
 
@@ -110,6 +109,7 @@ def _fetch_widget_text_once(url: str) -> Optional[str]:
     from playwright.sync_api import sync_playwright
 
     from .. import config
+    from ..entry_execution.browser import dismiss_consent_banner
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -117,13 +117,7 @@ def _fetch_widget_text_once(url: str) -> Optional[str]:
         try:
             page.goto(url, timeout=30000)
             page.wait_for_timeout(2000)
-            try:
-                page.frame_locator(_CONSENT_IFRAME_SELECTOR).get_by_role(
-                    "button", name="Accept"
-                ).first.click(timeout=5000)
-                page.wait_for_timeout(1000)
-            except Exception:
-                pass  # no consent modal this time, or it didn't match — proceed regardless
+            dismiss_consent_banner(page)
 
             widget_el = page.locator(_WIDGET_IFRAME_SELECTOR)
             if widget_el.count() == 0:

@@ -11,10 +11,12 @@ import logging
 import tempfile
 from pathlib import Path
 
+from .. import config
 from ..models import EntryChannel, EntryRecord, EntryStatus, Promotion
+from ..stations import global_win
 from ..storage.base import get_repository
 from ..storage.user_profile_store import load_user_profile
-from . import browser, llm_mapping, notify_draft, screenshots
+from . import browser, global_win_auth, llm_mapping, notify_draft, screenshots
 from .fill_plan import build_fill_actions, needs_manual_input, validate_mapping
 
 logger = logging.getLogger(__name__)
@@ -24,7 +26,30 @@ def draft_one(promo: Promotion, channel: EntryChannel) -> EntryRecord:
     entry_repo = get_repository("entry_records", EntryRecord)
     url = channel.channel_url_or_number or promo.source_url
 
-    with browser.open_page(url) as page:
+    is_global_win = promo.station_name_raw == global_win.STATION_NAME
+    if is_global_win and not (config.GLOBAL_PLAYER_EMAIL and config.GLOBAL_PLAYER_PASSWORD):
+        # Same shape as the "no UserProfile configured" hard-stop below —
+        # fail clearly rather than attempting anything. Global WIN's own
+        # entry form requires a real signed-in session (see
+        # global_win_auth.py's docstring); with no credentials configured
+        # there is nothing this engine can do for this channel at all.
+        record = EntryRecord(
+            promotion_id=promo.id,
+            channel_type=channel.channel_type,
+            channel_id=channel.id,
+            status=EntryStatus.FAILED,
+            submission_error="GLOBAL_PLAYER_EMAIL/PASSWORD not set",
+        )
+        entry_repo.add(record)
+        logger.error(
+            "Promotion %s is a Global WIN channel but GLOBAL_PLAYER_EMAIL/PASSWORD are unset, refusing to draft",
+            promo.id,
+        )
+        return record
+
+    opener = global_win_auth.open_authenticated_page if is_global_win else browser.open_page
+
+    with opener(url) as page:
         fields = browser.extract_form_fields(page)
 
         if not fields:
