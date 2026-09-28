@@ -49,6 +49,38 @@ def draft_one(promo: Promotion, channel: EntryChannel) -> EntryRecord:
 
     opener = global_win_auth.open_authenticated_page if is_global_win else browser.open_page
 
+    try:
+        return _draft_one_inner(promo, channel, url, opener, entry_repo)
+    except Exception as exc:
+        # Outer backstop, deliberately broad — a real gap found live
+        # (2026-09-28): an uncaught exception anywhere in this function
+        # (originally just the LLM field-mapping call, but the same is
+        # true of opener(url)'s own sign-in/navigation, or anything else
+        # not already given its own specific handler below) used to
+        # propagate straight out of draft_one() — run_entry_execution.py's
+        # own per-item try/except would log it and move on, but no
+        # EntryRecord ever got saved, so the channel looked "never
+        # attempted" again on the very next run. Combined with Cloud
+        # Run's own retry-on-timeout behaviour, one transient failure (a
+        # real Gemini free-tier rate-limit hit, in practice) turned into
+        # several repeated real sign-ins in a row for a Global WIN
+        # channel — exactly the kind of repeated-login pattern this
+        # project has tried hard to avoid. Recording FAILED here, for
+        # *anything* unhandled, stops a channel from being silently
+        # retried on every single run regardless of what actually broke.
+        record = EntryRecord(
+            promotion_id=promo.id,
+            channel_type=channel.channel_type,
+            channel_id=channel.id,
+            status=EntryStatus.FAILED,
+            submission_error=f"unexpected error during draft: {exc}",
+        )
+        entry_repo.add(record)
+        logger.exception("Unexpected error drafting promotion %s", promo.id)
+        return record
+
+
+def _draft_one_inner(promo: Promotion, channel: EntryChannel, url: str, opener, entry_repo) -> EntryRecord:
     with opener(url) as page:
         fields = browser.extract_form_fields(page)
 
@@ -64,7 +96,24 @@ def draft_one(promo: Promotion, channel: EntryChannel) -> EntryRecord:
             logger.warning("No form fields found for promotion %s, skipping draft", promo.id)
             return record
 
-        raw = llm_mapping.request_field_mapping(fields)
+        try:
+            raw = llm_mapping.request_field_mapping(fields)
+        except Exception as exc:
+            # A more specific message than the outer backstop's generic
+            # one, for the failure mode actually seen live (Gemini
+            # free-tier rate limiting) — see draft_one()'s own docstring
+            # comment for the full story.
+            record = EntryRecord(
+                promotion_id=promo.id,
+                channel_type=channel.channel_type,
+                channel_id=channel.id,
+                status=EntryStatus.FAILED,
+                submission_error=f"LLM field-mapping request failed: {exc}",
+            )
+            entry_repo.add(record)
+            logger.error("LLM field-mapping request failed for promotion %s: %s", promo.id, exc)
+            return record
+
         try:
             mapping = validate_mapping(raw, known_selectors={f["selector"] for f in fields})
         except ValueError as exc:

@@ -852,6 +852,30 @@ Run Job.
 Full suite: 194 passed, 1 skipped (pre-existing, unrelated — the live
 Gemini mapping test).
 
+## Update — the first real run found a real bug, fixed before resuming
+
+The Cloud Scheduler job was paused before binding real credentials, so
+the first real login would be manually triggered and watched, not fire
+on its own. Good call — it surfaced a real, pre-existing gap: `draft.py`
+never caught an LLM-mapping failure, so no `EntryRecord` ever got saved
+on error, and Cloud Run's own retry-on-timeout re-ran the whole job from
+scratch. With 5 real free Global WIN channels eligible at once and
+Gemini's free-tier rate limit hit immediately, this produced **8 real
+Global Player sign-ins in 16 minutes with nothing saved** — exactly the
+repeated-login pattern this feature was built to avoid, from an
+unrelated bug, not the login mechanism itself (which worked correctly
+every time).
+
+Fixed: `draft_one()`/`submit_one()` now each have a broad outer
+`try/except` that saves a `FAILED` record for *any* unhandled exception,
+and the entry-execution Cloud Run Job now has `maxRetries: 0` so a
+timeout is never auto-retried. Also moved `radio-comp-entry-execution`'s
+schedule from every 15 minutes to hourly (`15 * * * *`, offset after
+discovery's own hourly run) as an extra margin against the Gemini
+free-tier cap — though worth being honest that this isn't really what
+fixes the quota problem; polling frequency alone was never what drove
+login/LLM-call volume. Full suite: 197 passed, 1 skipped.
+
 ## Next steps (not built yet)
 
 Nothing from the original spec's core phases remains unbuilt. Open items

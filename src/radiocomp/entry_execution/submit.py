@@ -84,10 +84,33 @@ def submit_one(record: EntryRecord) -> EntryRecord:
         entry_repo.upsert(record)
         return record
 
+    opener = global_win_auth.open_authenticated_page if is_global_win else browser.open_page
+
+    try:
+        return _submit_one_inner(record, promo, channel, profile, opener, entry_repo)
+    except Exception as exc:
+        # Outer backstop, deliberately broad — mirrors draft.py's own (see
+        # its docstring comment for the full incident this responds to,
+        # 2026-09-28). Anything unhandled here (opener(url)'s own
+        # sign-in/navigation failing, an unexpected exception mid-fill,
+        # etc.) used to propagate straight out of submit_one() uncaught —
+        # no EntryRecord update ever saved, so the same record looked
+        # "still APPROVED, not yet submitted" again on the very next run,
+        # and Cloud Run's own retry-on-timeout behaviour could turn one
+        # transient failure into several repeated real sign-ins in a row.
+        # Recording FAILED here for anything unhandled stops that.
+        record.status = EntryStatus.FAILED
+        record.submission_error = f"unexpected error during submit: {exc}"
+        entry_repo.upsert(record)
+        logger.exception("Unexpected error submitting record %s", record.id)
+        notify_draft.send_submission_result(promo, record)
+        return record
+
+
+def _submit_one_inner(record: EntryRecord, promo: Promotion, channel: EntryChannel, profile, opener, entry_repo):
     mapping = FormMapping.model_validate(record.fill_plan)
     actions = build_fill_actions(mapping, profile)
     url = channel.channel_url_or_number or promo.source_url
-    opener = global_win_auth.open_authenticated_page if is_global_win else browser.open_page
 
     with opener(url) as page:
         # Re-tag the freshly-navigated page — see module docstring for why

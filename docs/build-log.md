@@ -1991,3 +1991,78 @@ once the two already-created Secret Manager secrets
 (`global-player-email`/`global-player-password`) are bound to the
 `radio-comp-entry-execution` Cloud Run Job (not done as part of this
 work — an infra step for the user to run separately).
+
+## 2026-09-28 — The first real run, a real bug found, and a real repeated-login incident
+
+Secrets bound, IAM granted (`roles/secretmanager.secretAccessor` for the
+compute service account — the initial `gcloud secrets create` calls
+didn't imply this, a real gap in the earlier instructions), image
+rebuilt, and — critically — the `radio-comp-entry-execution-15min`
+Cloud Scheduler job was paused *before* any of this, specifically so the
+first real login would be a manually-triggered, watched event rather
+than something firing unsupervised on its own 15-minute cadence.
+
+The manual trigger confirmed the core mechanism works: `global_win_auth.sign_in()`
+really did log in with real credentials and really did reach a real
+entry form. But it also surfaced two real, serious problems, neither of
+them specific to Global WIN:
+
+1. `draft.py` never caught an exception from `llm_mapping.request_field_mapping()` —
+   it just propagated out of `draft_one()` uncaught. `run_entry_execution.py`'s
+   own per-item `try/except` logs it and moves on, but **no `EntryRecord`
+   ever got saved**, so the channel looked "never attempted" again on the
+   very next pass.
+2. Cloud Run Jobs' own `maxRetries: 1` re-executes the *entire* job from
+   scratch after a timeout. The real authenticated flow (sign-in +
+   homepage load + click-through) takes long enough per channel that,
+   with 5 genuinely-free Global WIN channels eligible at once (a real
+   backlog, this being the first run since the feature shipped), the job
+   hit its own 600s timeout and got retried by Cloud Run itself.
+
+Combined, these two meant: five real channels, no saved record for any
+of them, each hit Gemini's free-tier rate limit (20 requests/day — hit
+immediately given the volume) and raised, and Cloud Run retried the
+whole thing at least once more. Net result: **8 real Global Player
+sign-ins in 16 minutes**, zero drafts produced, zero records saved —
+exactly the repeated-login pattern this whole feature was designed to
+avoid, caused by an unrelated pre-existing gap, not by anything wrong
+with the login mechanism itself.
+
+Fixed both root causes, not just the specific failure mode observed:
+- `draft_one()`/`submit_one()` are now each wrapped in a broad outer
+  `try/except Exception` (`draft.py`'s `_draft_one_inner`/`submit.py`'s
+  `_submit_one_inner`) that saves a `FAILED` `EntryRecord` with a clear
+  `submission_error` for *anything* unhandled — not just the LLM call,
+  since the exact same silent-propagation risk exists for `opener(url)`'s
+  own sign-in/navigation failing, or anything else not already given its
+  own specific handler. The LLM call additionally keeps its own
+  more-specific inner handler (a clearer error message for the failure
+  mode actually seen live) inside that same backstop.
+- `radio-comp-entry-execution`'s Cloud Run Job now has `maxRetries: 0` —
+  Cloud Run itself never automatically re-executes a timed-out/crashed
+  job; a real failure is picked up cleanly on the job's own next
+  scheduled tick instead (which re-evaluates draftable/submittable
+  channels fresh), not blindly re-run in place.
+- `tests/test_entry_execution_error_handling.py` (3 tests): an LLM
+  exception and an unrelated opener exception (simulating a sign-in/
+  navigation failure) both now save a `FAILED` record instead of
+  propagating, for both `draft_one()` and `submit_one()`. Full suite:
+  197 passed, 1 skipped.
+
+**On the Gemini quota itself**: discussed moving off the free tier
+(cheap for this volume) vs. reducing entry-execution's own polling
+frequency. Chose to stay on the free tier and reduce frequency instead —
+`radio-comp-entry-execution-15min`'s Cloud Scheduler cadence changed from
+`*/15 * * * *` to `15 * * * *` (hourly, offset 15 minutes after
+`radio-comp-discovery-hourly`'s own `0 * * * *` run, so it never reads
+promotions/channels the same instant discovery might still be writing
+them). Worth being honest about the actual mechanism here: once the bug
+above is fixed, polling frequency doesn't multiply login/LLM-call
+volume by itself — an idle tick with nothing eligible already exits
+before Playwright ever launches, so login count is really driven by how
+many genuinely-free channels get discovered per day, not by how often
+entry-execution checks. Reducing to hourly is a reasonable extra safety
+margin regardless (fewer poll cycles, one less variable), but it doesn't
+fully remove the risk that a single day's genuine volume (across *all*
+sources, not just Global WIN) could still exceed the free tier's 20
+requests/day on its own.
