@@ -43,7 +43,23 @@ from ..models import EntryRecord, EntryStatus, Promotion
 # Keys are informal network labels (for the human-readable note), values are
 # lower-cased station names sharing that network's cross-brand entry limit.
 SHARED_LIMIT_NETWORKS: dict[str, frozenset[str]] = {
-    "Global": frozenset({"heart", "capital", "smooth", "smooth radio", "classic fm", "lbc", "radio x"}),
+    "Global": frozenset(
+        {
+            "heart",
+            "capital",
+            "smooth",
+            "smooth radio",
+            "classic fm",
+            "lbc",
+            "radio x",
+            # This adapter's own station_name_raw (see
+            # stations/global_win.py) — needs to be a member here too, or
+            # its own promotions would never be recognised as
+            # Global-network by shared_network_for() at all. Same pattern
+            # as "make me a winner (bauer)" below for Bauer.
+            "global win",
+        }
+    ),
     "Bauer": frozenset(
         {
             "kiss",

@@ -56,7 +56,7 @@ def _load_adapters() -> list[tuple[str, object]]:
     not a module-level global appended to, so calling this more than once
     (e.g. from a test) can't duplicate entries."""
     from .aggregators import theprizefinder
-    from .stations import bauer_makemeawinner, heart_global, radioexe, talksport, wayin
+    from .stations import bauer_makemeawinner, global_win, radioexe, talksport, wayin
 
     return [
         ("theprizefinder", theprizefinder.ingest),
@@ -64,7 +64,7 @@ def _load_adapters() -> list[tuple[str, object]]:
         ("radioexe", radioexe.ingest),
         ("bauer_makemeawinner", bauer_makemeawinner.ingest),
         ("wayin", wayin.ingest),
-        ("heart_global", heart_global.ingest),
+        ("global_win", global_win.ingest),
     ]
 
 

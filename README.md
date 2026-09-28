@@ -696,11 +696,12 @@ pass with all 5 adapters registered completed with 0 failures.
 
 ## Update — Heart/Global Player, and it needed no login after all
 
-`src/radiocomp/stations/heart_global.py` is a new adapter for
-`winplus.heart.co.uk`, Global's own first-party "Global WIN" competition
-platform, shared network-wide (Heart, Capital, Classic FM, Gold, LBC,
-Radio X, Smooth) via per-brand instances — the same "one adapter, several
-stations" shape as `bauer_makemeawinner.py`. Heart was dropped back in
+`src/radiocomp/stations/global_win.py` (renamed from `heart_global.py` —
+see the next update) is a new adapter for `winplus.heart.co.uk`, Global's
+own first-party "Global WIN" competition platform, shared network-wide
+(Heart, Capital, Classic FM, Gold, LBC, Radio X, Smooth) via per-brand
+instances — the same "one adapter, several stations" shape as
+`bauer_makemeawinner.py`. Heart was dropped back in
 early September after one of its off-page entry subdomains showed a
 misleading "successfully entered" state when read anonymously, on the
 assumption that reaching real free/paid status meant a genuine personal
@@ -742,6 +743,28 @@ Verified for real: a live discovery run found 14 real live Heart
 competitions correctly, a second run correctly deduped to 0 new, and a
 full `run_discovery.py` pass with all 6 adapters registered completed
 with 0 failures.
+
+## Update — `global_win.py`: stopped filtering to Heart only
+
+The adapter above was filtering out every competition not tagged with
+Heart's own brand id before recording it. A live check of `init.json`'s
+full brands map confirmed it's entirely Global's own portfolio (Heart,
+Capital, Radio X, Smooth, Classic FM, LBC, Gold, Capital Xtra, Big Top 40,
+Global Player, Riviera Radio) with the same shared backend and entry
+mechanics regardless of which brand(s) display a competition — so
+filtering to one brand was just throwing away real, otherwise-unreachable
+competitions. `heart_global.py` → `global_win.py`, `STATION_NAME` →
+`"Global WIN"` (the platform's own real branding), and `ingest()` now
+records every non-hidden competition once, regardless of brand tagging —
+same "one shared platform, one shared station name" precedent
+`bauer_makemeawinner.py` already established, avoiding near-duplicate rows
+if this module were ever pointed at more than one brand.
+
+Verified for real: a live run found **16** competitions (up from 14
+Heart-only), including genuinely non-Heart-branded ones this adapter had
+been silently missing every run since it shipped — "Capital's Bong Game
+2026" and a Manic Street Preachers/Suede ticket giveaway among them. Full
+suite: 174 passed, 1 skipped.
 
 ## Next steps (not built yet)
 

@@ -1,11 +1,42 @@
 """
-Heart/Global Player — Global's own first-party "Global WIN" competition
-platform, shared network-wide (Heart, Capital, Classic FM, Gold, LBC,
-Radio X, Smooth), served per-brand at `winplus.<brand>.co.uk`/`.com`
-(e.g. `winplus.heart.co.uk`, `winplus.capitalfm.com`). This module only
-ever monitors the Heart-branded instance — `station_name_raw="Heart"`,
-so `compliance/engine.py`'s existing `SHARED_LIMIT_NETWORKS["Global"]`
-(which already lists "heart") applies with no engine change needed.
+Global WIN — Global's own first-party shared competition platform,
+network-wide across Global's entire portfolio (Heart, Capital, Classic
+FM, Gold, LBC, Radio X, Smooth, Capital Xtra, Big Top 40, Global Player,
+Riviera Radio, and "Win Plus"/Global WIN's own brand entry), served
+per-brand at `winplus.<brand>.co.uk`/`.com` (e.g. `winplus.heart.co.uk`,
+`winplus.capitalfm.com` — every brand instance is the same shared
+backend, confirmed live 2026-09-25, see the "Generalised" note below).
+`station_name_raw=STATION_NAME` ("Global WIN"), `network=STATION_NETWORK`
+("Global") — both need to be members of `compliance/engine.py`'s
+`SHARED_LIMIT_NETWORKS["Global"]`, same self-registration pattern
+`bauer_makemeawinner.py`'s own `station_name_raw` uses for
+`SHARED_LIMIT_NETWORKS["Bauer"]`.
+
+**Generalised from a Heart-only adapter to a whole-platform one
+(2026-09-25).** Originally `heart_global.py` monitored only Heart's own
+numeric brand id (2) inside the shared `brands` array on
+`/data/competitions/list.json`, filtering out every competition not
+tagged with it. Re-confirmed live that `/data/init.json`'s full `brands`
+map is entirely Global's own portfolio — nothing external mixed in (see
+history below) — and that competitions are brand-scoped for *display*
+only (a real competition, id 13771, "Win Two Tickets to See Manic Street
+Preachers and Suede", carries `brands: [67, 6]` — Global Player + Radio X
+only, no Heart at all) but not for the underlying entry mechanics: same
+API, same fields, same T&Cs template regardless of which brand(s) show
+it. Filtering to one brand meant the exact same shared competition would
+otherwise be recorded as N near-duplicate `Promotion` rows if this module
+were ever pointed at more than one brand — the same near-duplicate-row
+problem `bauer_makemeawinner.py` already solved by modelling itself as
+one shared `station_name_raw` rather than per-station. So this module now
+processes **every** non-hidden competition in `list.json` exactly once,
+regardless of brand tagging, instead of filtering to Heart's brand id.
+`fetch_brand_id()`/`/data/init.json` are still fetched, but purely for an
+informational sanity-check log line now — no longer used to gate which
+competitions get recorded. Renamed `heart_global.py` -> `global_win.py`
+and `STATION_NAME` from `"Heart"` to `"Global WIN"` (the platform's own
+real branding — confirmed live in `init.json`'s own `"winplus"` brand
+entry, `"brandName": "Win Plus"`) accordingly. See docs/build-log.md's
+2026-09-25 entry for the live-verification numbers.
 
 **A materially different, and better, outcome than the plan this module
 was originally scoped from assumed.** The plan's Part 2 (see
@@ -146,9 +177,14 @@ _SITE_BASE = "https://winplus.heart.co.uk"
 _INIT_URL = f"{_SITE_BASE}/data/init.json"
 _LIST_URL = f"{_SITE_BASE}/data/competitions/list.json"
 _DETAIL_URL_TMPL = _SITE_BASE + "/data/competitions/{comp_id}/details.json"
+# Used only for fetch_brand_id()'s informational sanity-check log line in
+# ingest() now, not for filtering which competitions get recorded — see
+# module docstring's "Generalised" note. "heart" specifically because it's
+# a well-known, long-lived brand code on this platform, not because it's
+# special to this module any more.
 _BRAND_CODE = "heart"
 
-STATION_NAME = "Heart"
+STATION_NAME = "Global WIN"
 STATION_NETWORK = "Global"
 
 # Public, client-side Gigya API key for Global Player's login flow — read
@@ -197,9 +233,10 @@ def _headers() -> dict:
 
 def fetch_brand_id(client: httpx.Client, brand_code: str = _BRAND_CODE) -> Optional[int]:
     """None if init.json's brands map doesn't have this brand_code at all
-    (site shape changed) — the caller treats that as "can't safely
-    proceed" rather than guessing a stale id, same posture as every other
-    ambiguity-by-default check in this codebase."""
+    (site shape changed). No longer used to gate which competitions
+    ingest() records (see module docstring) — ingest() only logs this
+    informationally now, as a lightweight "does init.json still look like
+    the shape we expect" check."""
     resp = client.get(_INIT_URL, headers=_headers(), timeout=config.REQUEST_TIMEOUT_SECONDS)
     resp.raise_for_status()
     data = resp.json()
@@ -363,9 +400,14 @@ def parse_detail(detail: dict) -> tuple[Optional[Promotion], list[EntryChannel]]
 
 def ingest() -> tuple[list[Promotion], list[EntryChannel]]:
     """No credentials touched anywhere in this function — see module
-    docstring. Three real calls: init.json (resolve Heart's numeric brand
-    id), competitions/list.json (every live competition + which brands
-    show it), then one details.json per Heart-relevant competition (for
+    docstring. Processes every non-hidden competition in
+    competitions/list.json exactly once, regardless of which Global
+    brand(s) it's tagged with (see module docstring's "Generalised"
+    note) — no longer filtered to Heart's brand id. Two real calls per
+    run beyond the one details.json per competition: init.json (resolved
+    only for an informational log line now, not used to gate anything)
+    and competitions/list.json itself (every live competition + which
+    brands show it), then one details.json per competition (for
     title/deadline/T&Cs — the list endpoint alone doesn't carry these)."""
     promo_repo = get_repository("promotions", Promotion)
     channel_repo = get_repository("entry_channels", EntryChannel)
@@ -377,43 +419,45 @@ def ingest() -> tuple[list[Promotion], list[EntryChannel]]:
     with httpx.Client() as client:
         try:
             brand_id = fetch_brand_id(client)
-        except httpx.HTTPError as exc:
-            logger.warning("Failed to resolve Heart's brand id from winplus.heart.co.uk init.json: %s", exc)
-            return new_promotions, new_channels
-        if brand_id is None:
-            logger.warning(
-                "winplus.heart.co.uk init.json has no %r brand entry — site shape may have changed, skipping this run",
+            logger.info(
+                "winplus.heart.co.uk init.json resolved %r brand id as %r (informational only — every "
+                "non-hidden competition is processed regardless of brand tagging, see module docstring)",
                 _BRAND_CODE,
+                brand_id,
             )
-            return new_promotions, new_channels
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "Failed to resolve %r brand id from winplus.heart.co.uk init.json (informational only, "
+                "continuing with the full unfiltered listing): %s",
+                _BRAND_CODE,
+                exc,
+            )
 
         try:
             listing = fetch_competition_list(client)
         except httpx.HTTPError as exc:
-            logger.warning("Failed to fetch Heart/Global Win competition list: %s", exc)
+            logger.warning("Failed to fetch Global WIN competition list: %s", exc)
             return new_promotions, new_channels
 
-        heart_items = [
-            item for item in listing if brand_id in (item.get("brands") or []) and not item.get("hidden")
-        ]
+        items = [item for item in listing if not item.get("hidden")]
 
         seen_this_run: set[str] = set()
-        for item in heart_items:
+        for item in items:
             comp_id = item.get("id")
             try:
                 detail = fetch_competition_details(client, comp_id)
             except httpx.HTTPError as exc:
-                logger.warning("Failed to fetch details for Heart/Global Win competition %r: %s", comp_id, exc)
+                logger.warning("Failed to fetch details for Global WIN competition %r: %s", comp_id, exc)
                 continue
 
             try:
                 promo, channels = parse_detail(detail)
             except (KeyError, TypeError) as exc:
-                logger.warning("Skipping malformed Heart/Global Win competition %r: %s", comp_id, exc)
+                logger.warning("Skipping malformed Global WIN competition %r: %s", comp_id, exc)
                 continue
             if promo is None:
                 logger.warning(
-                    "Could not extract a promotion from Heart/Global Win competition %r — missing id/slug/title",
+                    "Could not extract a promotion from Global WIN competition %r — missing id/slug/title",
                     comp_id,
                 )
                 continue
@@ -430,8 +474,8 @@ def ingest() -> tuple[list[Promotion], list[EntryChannel]]:
                 new_channels.append(channel)
 
     logger.info(
-        "Heart/Global Win ingestion: %d listed, %d new promotions, %d entry channels recorded",
-        len(heart_items),
+        "Global WIN ingestion: %d listed, %d new promotions, %d entry channels recorded",
+        len(items),
         len(new_promotions),
         len(new_channels),
     )

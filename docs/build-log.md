@@ -1751,3 +1751,51 @@ ingestion: 14 listed, 14 new promotions, 25 entry channels recorded`), a
 second run correctly deduped to 0 new, and a full `run_discovery.py` pass
 with all 6 adapters registered (`heart_global` now included) completed
 with 0 failures.
+
+## 2026-09-25 — `heart_global.py` generalised to the whole Global network, renamed `global_win.py`
+
+The Heart-only adapter above was filtering `/data/competitions/list.json`
+down to items tagged with Heart's own numeric brand id (2) before
+recording anything. Re-fetched `/data/init.json`'s full `brands` map live
+and confirmed it's entirely Global's own portfolio — Heart, Capital,
+Classic FM, Gold, LBC, Radio X, Smooth, Capital Xtra, Big Top 40, Global
+Player, Riviera Radio, and "Win Plus"/Global WIN's own brand entry, nothing
+external mixed in — and that a real competition (id 13771, "Win Two
+Tickets to See Manic Street Preachers and Suede") carries `brands: [67,
+6]` (Global Player + Radio X only, no Heart at all), confirming brand
+tagging genuinely scopes *display*, not just a redundant label. Since it's
+the same backend, same fields, same T&Cs template regardless of which
+brand(s) show a competition, filtering to one brand was strictly throwing
+away real, otherwise-unreachable competitions — a real gap, not a
+cautious default worth keeping.
+
+Fix: stop filtering by brand entirely. `ingest()` now processes every
+non-`hidden` item in the listing exactly once, regardless of its `brands`
+array — the same "one shared platform, one shared station_name_raw"
+precedent `bauer_makemeawinner.py` already established, applied here to
+avoid ever recording the same real competition as N near-duplicate rows
+if this module were pointed at more than one brand. `fetch_brand_id()`
+is still called, but purely for an informational sanity-check log line
+now, never to gate what gets recorded. Renamed the module (and its test
+file) `heart_global.py` → `global_win.py`, `STATION_NAME` from `"Heart"`
+to `"Global WIN"` (the platform's own real branding, confirmed live in
+`init.json`'s own `"winplus"` brand entry: `"brandName": "Win Plus"`).
+Added `"global win"` to `compliance/engine.py`'s
+`SHARED_LIMIT_NETWORKS["Global"]`, same self-registration pattern as
+Bauer's own adapter.
+
+New real fixture, `tests/fixtures/global_win_competition_details_13771_non_heart_brand.json`
+(the Manic Street Preachers/Suede competition above), specifically to
+prove a non-Heart-tagged competition is now recorded — the old adapter
+would have silently dropped it. `tests/test_global_win.py` (25 tests, up
+from 20) adds: `ingest()` still proceeding when brand-id resolution
+fails (informational only now, not a hard stop), a non-Heart-brand
+competition being recorded end-to-end, and hidden competitions still
+being skipped regardless of brand. Full suite: 174 passed, 1 skipped
+(pre-existing, unrelated). Verified end-to-end against the real live
+site with `STORAGE_BACKEND=local`: `python -m radiocomp.stations.global_win`
+found **16** real live competitions (up from 14 Heart-only), including
+genuinely non-Heart-branded ones — "Capital's Bong Game 2026" (four
+separate real entries) and the Manic Street Preachers/Suede competition
+above — that the previous, Heart-only adapter had been silently missing
+every single run since it shipped.

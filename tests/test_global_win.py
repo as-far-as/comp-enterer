@@ -23,6 +23,13 @@ Fixtures:
   Westlife", a real competition with competitionEntryType="free" — already
   free online, so (confirmed against the real fixture) no phone/post
   alternative route is described at all.
+- global_win_competition_details_13771_non_heart_brand.json — "Win Two
+  Tickets to See Manic Street Preachers and Suede", a real competition
+  tagged `brands: [67, 6]` (Global Player + Radio X only — Heart, brand id
+  2, is NOT among them), captured live 2026-09-25 specifically to prove
+  this module now records a competition regardless of which brand(s) it's
+  tagged with, rather than filtering to Heart's brand id (see module
+  docstring's "Generalised" note).
 
 No live network call is ever made in these tests. fetch_brand_id()/
 fetch_competition_list()/fetch_competition_details() take an httpx.Client,
@@ -50,7 +57,7 @@ import pytest
 
 from radiocomp import config
 from radiocomp.models import EntryChannelType
-from radiocomp.stations.heart_global import (
+from radiocomp.stations.global_win import (
     STATION_NAME,
     STATION_NETWORK,
     _derive_bff_token,
@@ -72,6 +79,9 @@ DETAILS_POST = json.loads(
     (FIXTURES / "heart_global_competition_details_13270.json").read_text()
 )  # Ninja Air Fryer
 DETAILS_FREE = json.loads((FIXTURES / "heart_global_competition_details_13666.json").read_text())  # Westlife
+DETAILS_NON_HEART_BRAND = json.loads(
+    (FIXTURES / "global_win_competition_details_13771_non_heart_brand.json").read_text()
+)  # Manic Street Preachers/Suede — brands: [67, 6], no Heart (id 2)
 
 
 class _FakeResponse:
@@ -168,7 +178,7 @@ def test_parse_detail_real_paid_competition_with_phone_route():
 
     assert promo is not None
     assert promo.title == "Win £10,000"
-    assert promo.station_name_raw == STATION_NAME == "Heart"
+    assert promo.station_name_raw == STATION_NAME == "Global WIN"
     assert promo.network == STATION_NETWORK == "Global"
     assert promo.source_url == "https://winplus.heart.co.uk/competition/13201/win-pound10000"
     assert promo.discovered_via.value == "direct"
@@ -264,7 +274,7 @@ def test_parse_detail_missing_date_stop_leaves_deadline_none():
 
 
 def test_extract_phone_channel_returns_none_when_no_phone_route_present():
-    from radiocomp.stations.heart_global import _tandc_text
+    from radiocomp.stations.global_win import _tandc_text
 
     text = _tandc_text(DETAILS_POST)  # this real competition only has a post route
 
@@ -272,7 +282,7 @@ def test_extract_phone_channel_returns_none_when_no_phone_route_present():
 
 
 def test_extract_post_channel_returns_none_when_no_post_route_present():
-    from radiocomp.stations.heart_global import _tandc_text
+    from radiocomp.stations.global_win import _tandc_text
 
     text = _tandc_text(DETAILS_PHONE)  # this real competition only has a phone route
 
@@ -293,20 +303,65 @@ def test_extract_phone_channel_without_standard_rate_language_stays_review_recom
     assert channel.channel_url_or_number == "03001234567"
 
 
-# --- ingest() error handling -------------------------------------------
+# --- ingest() end-to-end, brand-agnostic behaviour ---------------------
 
 
-def test_ingest_returns_empty_when_brand_id_cannot_be_resolved(monkeypatch):
-    import radiocomp.stations.heart_global as heart_global_module
+def test_ingest_still_proceeds_when_brand_id_cannot_be_resolved(monkeypatch, tmp_path):
+    """fetch_brand_id() is informational only now (see module docstring's
+    "Generalised" note) — a failure to resolve it must NOT stop ingest()
+    from processing the full listing, unlike the old Heart-only adapter
+    where a missing brand id meant "can't safely proceed"."""
+    import radiocomp.stations.global_win as global_win_module
 
-    monkeypatch.setattr(heart_global_module, "fetch_brand_id", lambda client: None)
+    monkeypatch.setattr(config, "LOCAL_DATA_DIR", tmp_path)  # isolate from real project data/
+    monkeypatch.setattr(global_win_module, "fetch_brand_id", lambda client: None)
+    monkeypatch.setattr(global_win_module, "fetch_competition_list", lambda client: [DETAILS_FREE])
+    monkeypatch.setattr(global_win_module, "fetch_competition_details", lambda client, comp_id: DETAILS_FREE)
+
+    promos, channels = global_win_module.ingest()
+
+    assert len(promos) == 1
+    assert promos[0].title == "Win Two Tickets to See Westlife"
+
+
+def test_ingest_records_a_competition_not_tagged_with_the_heart_brand_at_all(monkeypatch, tmp_path):
+    """The real point of this generalisation: a competition whose own
+    `brands` array never includes Heart's id (2) at all — see
+    DETAILS_NON_HEART_BRAND, brands: [67, 6] — must still be recorded.
+    The old, Heart-only adapter would have silently dropped this one."""
+    import radiocomp.stations.global_win as global_win_module
+
+    monkeypatch.setattr(config, "LOCAL_DATA_DIR", tmp_path)
+    monkeypatch.setattr(global_win_module, "fetch_brand_id", lambda client: 2)  # Heart, as normal
+    monkeypatch.setattr(global_win_module, "fetch_competition_list", lambda client: [DETAILS_NON_HEART_BRAND])
     monkeypatch.setattr(
-        heart_global_module,
-        "fetch_competition_list",
-        lambda client: (_ for _ in ()).throw(AssertionError("should not be called")),
+        global_win_module, "fetch_competition_details", lambda client, comp_id: DETAILS_NON_HEART_BRAND
     )
 
-    promos, channels = heart_global_module.ingest()
+    promos, channels = global_win_module.ingest()
+
+    assert len(promos) == 1
+    assert promos[0].title == "Win Two Tickets to See Manic Street Preachers and Suede"
+    assert promos[0].station_name_raw == "Global WIN"
+    assert 2 not in DETAILS_NON_HEART_BRAND["brands"]  # sanity: really isn't Heart-tagged
+
+
+def test_ingest_skips_hidden_competitions_regardless_of_brand(monkeypatch, tmp_path):
+    import radiocomp.stations.global_win as global_win_module
+
+    hidden = dict(DETAILS_FREE)
+    hidden["hidden"] = True
+
+    monkeypatch.setattr(config, "LOCAL_DATA_DIR", tmp_path)
+    monkeypatch.setattr(global_win_module, "fetch_brand_id", lambda client: 2)
+    monkeypatch.setattr(global_win_module, "fetch_competition_list", lambda client: [hidden])
+    monkeypatch.setattr(
+        global_win_module,
+        "fetch_competition_details",
+        lambda client, comp_id: (_ for _ in ()).throw(AssertionError("hidden items should never reach details.json")),
+    )
+
+    promos, channels = global_win_module.ingest()
 
     assert promos == []
     assert channels == []
