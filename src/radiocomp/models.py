@@ -81,6 +81,10 @@ class Promotion(BaseModel):
     source_url: str
     first_seen_at: datetime = Field(default_factory=datetime.utcnow)
     dedup_hash: str  # hash of (station_name_raw, title, rough deadline) — see aggregators/_dedup.py
+    recurrence_series_id: Optional[str] = None  # set only from a genuine source field confirming a
+    # recurring series (e.g. Global WIN's competitionScheduleId when competitionIsRound is true) —
+    # never inferred from title/date matching alone. notify/send.py uses this to send one message per
+    # series rather than one per occurrence (see docs/build-log.md, 2026-09-28).
 
 
 class TandCSnapshot(BaseModel):

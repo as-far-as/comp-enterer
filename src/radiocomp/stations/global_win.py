@@ -340,6 +340,16 @@ def parse_detail(detail: dict) -> tuple[Optional[Promotion], list[EntryChannel]]
     source_url = f"{_SITE_BASE}/competition/{comp_id}/{slug}"
     deadline = _parse_deadline(detail.get("dateStop"))
 
+    # A genuine source field, not an inferred/guessed pattern (see
+    # models.Promotion.recurrence_series_id) — confirmed live 2026-09-28
+    # on "Capital's Bong Game 2026", a real daily round: competitionIsRound
+    # is true and competitionScheduleId (11497) is shared identically
+    # across every day's own separate competition id/dateStart/dateStop.
+    # Lets notify/send.py send one message per series instead of one per
+    # daily occurrence.
+    schedule_id = detail.get("competitionScheduleId")
+    recurrence_series_id = str(schedule_id) if detail.get("competitionIsRound") and schedule_id else None
+
     prize_match = _PRIZE_RE.search(title)
     prize_value = None
     if prize_match:
@@ -357,6 +367,7 @@ def parse_detail(detail: dict) -> tuple[Optional[Promotion], list[EntryChannel]]
         discovered_via=DiscoveredVia.DIRECT,
         source_url=source_url,
         dedup_hash=promotion_dedup_hash(STATION_NAME, title, deadline),
+        recurrence_series_id=recurrence_series_id,
     )
 
     # competitionEntryType comes straight from Global's own backend — a

@@ -270,6 +270,46 @@ def test_parse_detail_missing_date_stop_leaves_deadline_none():
     assert promo.entry_deadline is None
 
 
+# --- recurrence_series_id — a real source field, never inferred ----------
+
+
+def test_parse_detail_sets_recurrence_series_id_for_a_real_recurring_round():
+    # Real shape confirmed live 2026-09-28 on "Capital's Bong Game 2026":
+    # competitionIsRound=true + a shared competitionScheduleId across every
+    # day's own separate competition id/dateStart/dateStop.
+    detail = dict(DETAILS_FREE)
+    detail["competitionIsRound"] = True
+    detail["competitionScheduleId"] = 11497
+
+    promo, _channels = parse_detail(detail)
+
+    assert promo is not None
+    assert promo.recurrence_series_id == "11497"
+
+
+def test_parse_detail_leaves_recurrence_series_id_none_for_an_ordinary_competition():
+    # None of the real fixtures captured so far are recurring rounds —
+    # confirms the default stays None rather than ever being guessed.
+    promo, _channels = parse_detail(DETAILS_FREE)
+
+    assert promo is not None
+    assert promo.recurrence_series_id is None
+
+
+def test_parse_detail_ignores_schedule_id_when_is_round_is_false():
+    # A schedule id without competitionIsRound=true shouldn't happen on
+    # real data, but if it did, this must not be treated as recurring —
+    # the boolean flag is the actual signal, not mere presence of an id.
+    detail = dict(DETAILS_FREE)
+    detail["competitionIsRound"] = False
+    detail["competitionScheduleId"] = 11497
+
+    promo, _channels = parse_detail(detail)
+
+    assert promo is not None
+    assert promo.recurrence_series_id is None
+
+
 # --- extract_phone_channel / extract_post_channel — pure -------------------
 
 

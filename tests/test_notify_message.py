@@ -50,6 +50,18 @@ def test_no_channels_says_so():
     assert "no entry channels recorded yet" in text
 
 
+def test_recurring_series_gets_a_note():
+    promo = _promo(recurrence_series_id="11497")
+    text = build_message_text(promo, [], _clean_check(promo.id))
+    assert "Recurring" in text
+
+
+def test_non_recurring_promotion_has_no_recurring_note():
+    promo = _promo()
+    text = build_message_text(promo, [], _clean_check(promo.id))
+    assert "Recurring" not in text
+
+
 def test_blocking_compliance_check_appends_warning():
     promo = _promo()
     check = ComplianceCheck(

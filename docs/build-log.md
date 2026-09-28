@@ -1799,3 +1799,59 @@ genuinely non-Heart-branded ones — "Capital's Bong Game 2026" (four
 separate real entries) and the Manic Street Preachers/Suede competition
 above — that the previous, Heart-only adapter had been silently missing
 every single run since it shipped.
+
+## 2026-09-28 — Recurring competitions: notify once per series, not once per occurrence
+
+"Capital's Bong Game 2026" turned out to be a genuine daily recurring
+round, not four coincidentally-similar competitions: every real
+`details.json` for it carries `competitionIsRound: true` and an identical
+`competitionScheduleId` (11497) across each day's own separate competition
+id/dateStart/dateStop. Left as-is, this would mean a fresh Approve/Skip
+Telegram message every single day, indefinitely, for as long as the
+segment runs — and Global's platform likely runs several of these
+"daily play-along" formats, not just this one.
+
+Rather than guess at recurrence from title/date matching (the usual
+"never guess" posture), used the genuine field the source itself
+provides: `global_win.py`'s `parse_detail()` now sets a new
+`Promotion.recurrence_series_id` (`str(competitionScheduleId)`) whenever
+`competitionIsRound` is true, `None` otherwise — never inferred for
+sources that don't supply a real recurrence signal (see below).
+`notify/send.py`'s new `_is_first_of_its_series()` then only notifies the
+promotion with the *earliest* `entry_deadline` among every stored
+promotion sharing a `recurrence_series_id` — deterministic and
+storage-driven (no new "already notified" flag needed), and correct
+regardless of whether several days of the same series are discovered in
+one run (a first-ever run can find them all at once, as happened here) or
+one at a time on subsequent days. The first (and only) notification for a
+series gets an added note ("🔁 Recurring — this is the first occurrence
+found; later ones won't re-notify.") so it's clear from the message itself
+why tomorrow's round won't page again. Approve/Skip still behaves
+normally for that one message; approving it never auto-approves future
+occurrences — each later round is still its own separate `Promotion`/
+`EntryChannel` that nothing has approved, so the entry-execution engine
+won't touch it without a fresh human decision, unchanged from how every
+other promotion already works.
+
+**A second, real instance of the same underlying problem found while
+checking this, deliberately left unfixed**: Loquax (the forum aggregator)
+has independently rediscovered the exact same "Capital's Bong Game"
+thread roughly every 9 days since 2026-09-04, as separate, unlinked
+promotions (`station_name_raw="(unresolved — see Loquax thread)"`).
+Unlike Global WIN, Loquax is a forum aggregator with no genuine recurring-
+series field to key off — only a title string — so applying the same fix
+there would mean guessing recurrence from text matching, which this
+project avoids on principle. Left as a known, much milder version of the
+same noise (repeats every ~9 days, not daily) rather than building a
+heuristic for it.
+
+`tests/test_global_win.py` (28 tests, up from 25): `recurrence_series_id`
+set correctly from a real recurring-round shape, left `None` for an
+ordinary competition, and not set merely from a stray `competitionScheduleId`
+without `competitionIsRound=true`. `tests/test_notify_send.py` (+3):
+several days of one series discovered at once only notifies the
+earliest, a later occurrence is skipped when an earlier one is already
+stored, and ordinary (non-recurring) promotions are unaffected.
+`tests/test_notify_message.py` (+2): the recurring note appears only when
+`recurrence_series_id` is set. Full suite: 182 passed, 1 skipped
+(pre-existing, unrelated).

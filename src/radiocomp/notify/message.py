@@ -3,6 +3,11 @@ Builds a Telegram notification's text and inline keyboard for one
 promotion. Reuses view_promotions.py's own formatting (formatting.py) so
 the CLI and the Telegram message never say different things about the
 same channel.
+
+build_message_text() only ever adds the recurring-series note — the
+suppression of later occurrences (deciding *whether* this promotion
+should be notified at all) lives one level up, in notify/send.py, which
+is the only place with repository access to check for earlier siblings.
 """
 
 from __future__ import annotations
@@ -32,6 +37,9 @@ def build_message_text(promotion: Promotion, channels: list[EntryChannel], compl
 
     if compliance.blocks_new_entry:
         lines.append(f"⚠️ {compliance.note}")
+
+    if promotion.recurrence_series_id:
+        lines.append("🔁 Recurring — this is the first occurrence found; later ones won't re-notify.")
 
     lines.append(promotion.source_url)
     return "\n".join(lines)

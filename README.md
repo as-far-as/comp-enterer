@@ -766,6 +766,28 @@ been silently missing every run since it shipped — "Capital's Bong Game
 2026" and a Manic Street Preachers/Suede ticket giveaway among them. Full
 suite: 174 passed, 1 skipped.
 
+## Update — recurring competitions notify once, not once per day
+
+"Capital's Bong Game 2026" turned out to be a genuine daily round
+(`competitionIsRound: true`, a shared `competitionScheduleId` across every
+day's own separate competition), which would otherwise mean a fresh
+Approve/Skip Telegram message every single day, indefinitely. `Promotion`
+now has a `recurrence_series_id` field, set only from that genuine source
+signal (never guessed), and `notify/send.py` only ever notifies the
+earliest-deadline promotion sharing a series id — later occurrences are
+silently skipped, and the one message that does go out says so. Approving
+it never carries forward to future occurrences; each day's round is still
+its own separate record needing its own human decision, same as
+everything else here.
+
+Loquax has been independently hitting this same competition every ~9 days
+via its own forum thread, as separate unlinked promotions — a milder
+version of the same problem, left unfixed since a forum aggregator has no
+genuine recurrence field to key off, only a title string, and guessing
+would break this project's "never infer what isn't really there" rule.
+
+Full suite: 182 passed, 1 skipped.
+
 ## Next steps (not built yet)
 
 Nothing from the original spec's core phases remains unbuilt. Open items
