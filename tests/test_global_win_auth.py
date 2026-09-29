@@ -1,16 +1,17 @@
 """
 Offline tests for entry_execution/global_win_auth.py's pure-ish pieces:
-extract_competition_id() and _resolve_homepage_for_competition() (against
+extract_competition_id() and _resolve_homepages_for_competition() (against
 the same real fixtures test_global_win.py already uses — no live network
 call in either).
 
 sign_in()/open_authenticated_page()/_click_through_to_competition() are
 inherently live-Playwright and not unit-tested here, matching
 stations/talksport_widget.py's own precedent (its live-fetch functions
-aren't unit-tested either) — see docs/build-log.md, 2026-09-28, for what
-was verified live instead, and tests/test_entry_execution_routing.py for
-the offline-testable routing logic in draft.py/submit.py that decides
-*when* open_authenticated_page() gets called.
+aren't unit-tested either) — see docs/build-log.md, 2026-09-28 and
+2026-09-29, for what was verified live instead, and
+tests/test_entry_execution_routing.py for the offline-testable routing
+logic in draft.py/submit.py that decides *when* open_authenticated_page()
+gets called.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ import httpx
 import pytest
 
 from radiocomp.entry_execution.global_win_auth import (
-    _resolve_homepage_for_competition,
+    _resolve_homepages_for_competition,
     extract_competition_id,
 )
 
@@ -74,21 +75,21 @@ def test_extract_competition_id_raises_on_a_url_with_no_competition_segment():
         extract_competition_id("https://winplus.heart.co.uk/some-other-page")
 
 
-# --- _resolve_homepage_for_competition() ---------------------------------
+# --- _resolve_homepages_for_competition() --------------------------------
 
 
-def test_resolves_homepage_for_a_real_non_heart_brand_competition():
+def test_resolves_every_candidate_homepage_for_a_real_non_heart_brand_competition_in_order():
     # id 13771, "Win Two Tickets to See Manic Street Preachers and Suede" —
     # real fixture data, brands: [67, 6] (Global Player + Radio X, no
-    # Heart at all — see stations/global_win.py's own docstring). 67
-    # (globalplayer) comes first in the real brands array, so that's the
-    # homepage resolved, confirmed live 2026-09-28 to be a real, reachable
-    # winplus subdomain.
+    # Heart at all — see stations/global_win.py's own docstring). Must
+    # return BOTH candidates, in brands-array order — not just the first
+    # (globalplayer) — since a real gap found live 2026-09-29 showed the
+    # first match doesn't always actually link to the competition.
     client = _FakeClient({"init.json": INIT, "list.json": LIST})
 
-    homepage = _resolve_homepage_for_competition(client, 13771)
+    homepages = _resolve_homepages_for_competition(client, 13771)
 
-    assert homepage == "https://www.winplus.globalplayer.com/"
+    assert homepages == ["https://www.winplus.globalplayer.com/", "https://www.winplus.radiox.co.uk/"]
 
 
 def test_resolves_homepage_for_a_competition_tagged_with_only_one_known_brand():
@@ -99,16 +100,28 @@ def test_resolves_homepage_for_a_competition_tagged_with_only_one_known_brand():
     listing = [{"id": 99001, "slug": "radiox-only-competition", "brands": [6]}]
     client = _FakeClient({"init.json": INIT, "list.json": listing})
 
-    homepage = _resolve_homepage_for_competition(client, 99001)
+    homepages = _resolve_homepages_for_competition(client, 99001)
 
-    assert homepage == "https://www.winplus.radiox.co.uk/"
+    assert homepages == ["https://www.winplus.radiox.co.uk/"]
+
+
+def test_skips_tagged_brands_with_no_known_homepage_but_still_returns_the_rest():
+    # rivieraradio (id 100) has no known homepage (see below) — a
+    # competition tagged with it *and* a real known brand must still
+    # resolve to the known one, not fail just because one tag is unmapped.
+    listing = [{"id": 99003, "slug": "riviera-and-radiox", "brands": [100, 6]}]
+    client = _FakeClient({"init.json": INIT, "list.json": listing})
+
+    homepages = _resolve_homepages_for_competition(client, 99003)
+
+    assert homepages == ["https://www.winplus.radiox.co.uk/"]
 
 
 def test_raises_when_competition_id_is_not_in_the_listing_at_all():
     client = _FakeClient({"init.json": INIT, "list.json": LIST})
 
     with pytest.raises(RuntimeError, match="not found"):
-        _resolve_homepage_for_competition(client, 9999999)
+        _resolve_homepages_for_competition(client, 9999999)
 
 
 def test_raises_when_every_tagged_brand_has_no_known_homepage():
@@ -120,4 +133,4 @@ def test_raises_when_every_tagged_brand_has_no_known_homepage():
     client = _FakeClient({"init.json": INIT, "list.json": listing})
 
     with pytest.raises(RuntimeError, match="none of which"):
-        _resolve_homepage_for_competition(client, 99002)
+        _resolve_homepages_for_competition(client, 99002)

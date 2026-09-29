@@ -2066,3 +2066,41 @@ margin regardless (fewer poll cycles, one less variable), but it doesn't
 fully remove the risk that a single day's genuine volume (across *all*
 sources, not just Global WIN) could still exceed the free tier's 20
 requests/day on its own.
+
+## 2026-09-29 — Two more real gaps found on the first real scheduled runs
+
+**The Cloud Scheduler trigger for `radio-comp-entry-execution` had never
+actually worked.** It fired hourly all along, but every attempt failed
+with a permission error before ever creating a job execution — the
+compute service account was never granted `roles/run.invoker` on this
+specific job (unlike `radio-comp-discovery`, which had it from the
+start). Every real run to date, including the two from 2026-09-28, was
+manually triggered. Fixed with one `gcloud run jobs add-iam-policy-binding`
+call; confirmed live afterward that the schedule now actually creates and
+completes real executions.
+
+**Most real drafts were still failing, just safely now.** With the
+scheduler fix in place, a real scheduled run picked up 6 draftable
+channels. Yesterday's exception-handling fix worked exactly as designed —
+every failure got exactly one real login and a clean `FAILED` record, no
+repeats. But the actual failures revealed a new, previously-unknown gap:
+5 of 6 failed at the in-app click-through step, because the resolved
+brand homepage (almost always `winplus.globalplayer.com`, since
+`globalplayer` is usually the first brand tag on a competition) doesn't
+actually surface a clickable link to it. Being tagged for a brand and
+being *linked from* that brand's own homepage turned out to be two
+different things.
+
+Fixed: `_resolve_homepage_for_competition` (singular) is now
+`_resolve_homepages_for_competition` (plural) — returns every known
+homepage a competition is tagged with, in its own `brands`-array order,
+instead of just the first match. `open_authenticated_page` tries each
+candidate in turn (navigate, dismiss consent, attempt the click-through)
+and only raises once every candidate has failed. `tests/test_global_win_auth.py`
+updated to match (7 tests, including a new one proving an unmapped brand
+tag alongside a real one still resolves to the real one rather than
+failing outright). Full suite: 198 passed, 1 skipped.
+
+Not yet re-verified live whether this actually gets a real draft all the
+way through — that's the natural next thing to watch for once this
+deploys and the scheduler's next tick finds something eligible.

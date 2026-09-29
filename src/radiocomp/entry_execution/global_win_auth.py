@@ -57,6 +57,19 @@ engineer and replicate that cross-domain SSO handshake ourselves.
 `login()` itself is untouched and unused by this module — a separate,
 idle capability, as before.
 
+**A third finding, from the first real scheduled runs (2026-09-29):**
+being tagged for a brand in a competition's own `brands` array doesn't
+mean that brand's own `winplus.*` homepage actually surfaces a clickable
+link to it — `winplus.globalplayer.com` in particular routinely doesn't
+list competitions it's tagged with (5 of 6 real competitions checked that
+day failed their click-through there, all resolved to that homepage
+since `globalplayer` is usually the first brand in a competition's own
+tag list). `_resolve_homepages_for_competition` now returns every
+candidate homepage a competition is tagged with, in order, and
+`open_authenticated_page` tries each in turn until one actually links to
+it — trusting only the first candidate left most real competitions
+unreachable. See docs/build-log.md, 2026-09-29.
+
 **The real first login is deliberately not something this module, or any
 agent, does unsupervised.** `config.GLOBAL_PLAYER_EMAIL`/
 `GLOBAL_PLAYER_PASSWORD` are real Secret Manager secrets that exist but
@@ -153,13 +166,23 @@ def extract_competition_id(url: str) -> int:
     return int(match.group(1))
 
 
-def _resolve_homepage_for_competition(client: httpx.Client, comp_id: int) -> str:
+def _resolve_homepages_for_competition(client: httpx.Client, comp_id: int) -> list[str]:
     """A real competition's own `brands` array (from
     `/data/competitions/list.json`) plus `/data/init.json`'s brand-code map
-    determines which real `winplus.<brand>` homepage actually features it
-    (see module docstring). Resolves live at draft/submit time (two cheap
-    extra API calls), not stored speculatively on `Promotion` at discovery
-    time, since it's only ever needed here.
+    determines which real `winplus.<brand>` homepage(s) might actually
+    feature it (see module docstring). Resolves live at draft/submit time
+    (two cheap extra API calls), not stored speculatively on `Promotion`
+    at discovery time, since it's only ever needed here.
+
+    Returns every known homepage the competition is tagged with, in the
+    same order as its own `brands` array — **not just the first one**.
+    A real gap found live (2026-09-29): being tagged for a brand doesn't
+    mean that brand's own homepage actually surfaces a clickable link to
+    it (`winplus.globalplayer.com` in particular routinely doesn't list
+    competitions it's tagged with — confirmed live, 5 of 6 real
+    competitions checked that day failed their click-through there). So
+    `open_authenticated_page` below tries each candidate in turn rather
+    than trusting the first match to actually work.
 
     Raises RuntimeError if `comp_id` isn't in the current listing at all,
     or if every brand it's tagged with maps to an unknown/unmapped brand
@@ -176,19 +199,22 @@ def _resolve_homepage_for_competition(client: httpx.Client, comp_id: int) -> str
     if item is None:
         raise RuntimeError(
             f"competition {comp_id} not found in Global WIN's own /data/competitions/list.json — "
-            "can't resolve which brand homepage to use"
+            "can't resolve which brand homepage(s) to try"
         )
 
+    homepages: list[str] = []
     for brand_id in item.get("brands", []):
         code = id_to_code.get(brand_id)
         homepage = _BRAND_CODE_TO_HOMEPAGE.get(code) if code else None
-        if homepage:
-            return homepage
+        if homepage and homepage not in homepages:
+            homepages.append(homepage)
 
-    raise RuntimeError(
-        f"competition {comp_id} is only tagged with brand id(s) {item.get('brands')!r}, none of which "
-        "resolves to a known winplus homepage (see _BRAND_CODE_TO_HOMEPAGE) — refusing to guess one"
-    )
+    if not homepages:
+        raise RuntimeError(
+            f"competition {comp_id} is only tagged with brand id(s) {item.get('brands')!r}, none of which "
+            "resolves to a known winplus homepage (see _BRAND_CODE_TO_HOMEPAGE) — refusing to guess one"
+        )
+    return homepages
 
 
 def sign_in(page) -> None:
@@ -256,9 +282,16 @@ def _click_through_to_competition(page, comp_id: int) -> None:
 @contextmanager
 def open_authenticated_page(url: str):
     """Same shape as `browser.open_page()`: launch, sign in, navigate to
-    the real entry form via the resolved brand homepage + in-app
+    the real entry form via a resolved brand homepage + in-app
     click-through (never a direct `goto()` of `url` itself — see module
     docstring), then yield the page once real content has loaded.
+
+    Tries every candidate homepage the competition is tagged with, in
+    order, until one actually links to it — a real gap found live
+    (2026-09-29): being tagged for a brand doesn't mean that brand's own
+    homepage surfaces a clickable link to it, so trusting only the first
+    candidate left most real competitions unreachable. Only raises once
+    every candidate has failed.
 
     Fresh sign-in every call — no session reuse across channels in one
     run, matching this codebase's "nothing persisted, fresh every time"
@@ -267,7 +300,7 @@ def open_authenticated_page(url: str):
     more than one Global WIN channel per run)."""
     comp_id = extract_competition_id(url)
     with httpx.Client() as client:
-        homepage_url = _resolve_homepage_for_competition(client, comp_id)
+        homepage_urls = _resolve_homepages_for_competition(client, comp_id)
 
     from playwright.sync_api import sync_playwright
 
@@ -276,9 +309,28 @@ def open_authenticated_page(url: str):
         page = browser.new_page(user_agent=config.USER_AGENT)
         try:
             sign_in(page)
-            page.goto(homepage_url, timeout=30000)
-            dismiss_consent_banner(page)
-            _click_through_to_competition(page, comp_id)
+
+            last_exc: Optional[Exception] = None
+            for homepage_url in homepage_urls:
+                try:
+                    page.goto(homepage_url, timeout=30000)
+                    dismiss_consent_banner(page)
+                    _click_through_to_competition(page, comp_id)
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    logger.info(
+                        "Competition %s not reachable via %s, trying next candidate homepage: %s",
+                        comp_id,
+                        homepage_url,
+                        exc,
+                    )
+            else:
+                raise RuntimeError(
+                    f"competition {comp_id} not reachable via in-app click-through from any of its "
+                    f"{len(homepage_urls)} candidate brand homepage(s): {homepage_urls}"
+                ) from last_exc
+
             yield page
         finally:
             browser.close()

@@ -876,6 +876,26 @@ free-tier cap — though worth being honest that this isn't really what
 fixes the quota problem; polling frequency alone was never what drove
 login/LLM-call volume. Full suite: 197 passed, 1 skipped.
 
+## Update — the scheduler had never actually worked, and most drafts were still failing
+
+Two more real gaps, found on the first real scheduled runs. First: the
+Cloud Scheduler trigger for `radio-comp-entry-execution` had a missing
+IAM binding (`roles/run.invoker` for the compute service account) and had
+been silently failing before ever creating an execution — every real run
+to date was manually triggered, the schedule itself had never fired
+successfully. Fixed with one IAM binding.
+
+Second: with that fixed, a real run picked up 6 draftable channels and 5
+failed at the click-through step — the resolved brand homepage (usually
+`winplus.globalplayer.com`) doesn't actually link to the competition it's
+tagged for, even though it's a real, correctly-resolved brand tag. Being
+tagged for a brand and being *linked from* that brand's homepage turned
+out to be two different things. Fixed: `open_authenticated_page` now
+tries every candidate homepage a competition is tagged with, in order,
+instead of trusting the first one to work. Full suite: 198 passed,
+1 skipped. Not yet re-verified live whether this actually gets a draft
+all the way through.
+
 ## Next steps (not built yet)
 
 Nothing from the original spec's core phases remains unbuilt. Open items
