@@ -53,13 +53,30 @@ classification:
 - "profile_field": the field clearly maps to one of these five known
   fields: name, date_of_birth, address, phone, email. Set profile_field
   to the matching name exactly.
-- "checkbox": also set checkbox_action —
+- "checkbox": ONLY for a plain single toggle with no options list attached
+  (a lone agree/opt-in checkbox with nothing else to choose between) —
+  also set checkbox_action:
     "check" only for something required to submit and clearly about
       consenting to the competition's own rules, confirming age or
       eligibility, or accepting official terms and conditions.
     "leave_unchecked" for ANYTHING else, including any marketing,
       newsletter, partner-offer, or "keep me updated" opt-in, and for
       anything ambiguous. When in doubt, leave unchecked.
+  Never use "checkbox" for a field that has an options list attached, even
+  one with only two options — use "option_group" instead.
+- "option_group": for a multiple-choice question — radio buttons, a
+  dropdown, or a group of checkboxes representing one choice among named
+  alternatives — where you are given the real list of possible option
+  texts. Set selected_option to the exact text of the single option that
+  is truthfully and correctly appropriate for a genuine, eligible UK adult
+  entrant honestly answering this specific question — copied verbatim from
+  the options given. Get the direction right, not just "agreed" — e.g.
+  "Are you 18 or over?" -> "Yes", but "Are you an employee of the promoter
+  or their family?" -> "No". Only use this when you are confident which
+  single option is correct. If you're unsure, if the question needs
+  information you can't truthfully know on the entrant's behalf, or if
+  more than one option should apply (a "select all that apply" checkbox
+  group), use "unmappable" instead — never guess a direction.
 - "creative_freetext": any open-ended text asking for a creative,
   persuasive, or skill-based answer — a tie-breaker, "in 25 words or
   fewer...", "tell us why you deserve to win", a caption, a joke —

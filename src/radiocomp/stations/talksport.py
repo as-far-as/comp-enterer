@@ -47,7 +47,7 @@ from .. import config
 from ..models import DiscoveredVia, EntryChannel, EntryChannelType, Promotion
 from ..storage.base import get_repository
 from ..dedup import promotion_dedup_hash
-from . import talksport_widget
+from . import google_forms, talksport_widget
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +60,18 @@ _DEADLINE_RE = re.compile(
 )
 _PRIZE_RE = re.compile(r"£\s?([\d,]+(?:\.\d+)?)\s*(?:k\b)?", re.IGNORECASE)
 _MONEY_RE = re.compile(r"£\s?([\d,]+(?:\.\d+)?)")
+
+# A genuine free-indicator phrase in the page's own prose — checked live
+# (2026-09-30) against the two real embedded-Google-Form competitions this
+# fallback was built for; neither uses any of these phrases anywhere near
+# the form mention, so both correctly stay is_free_route=None/
+# review_recommended=True rather than being guessed free just because
+# "uses a Google Form" isn't itself evidence of anything. Kept in case a
+# future competition's prose actually does say one of these.
+_FREE_INDICATOR_RE = re.compile(
+    r"\bfree\s+(?:to\s+)?enter\b|\bno\s+purchase\s+necessary\b|\bfree\s+of\s+charge\b",
+    re.IGNORECASE,
+)
 
 # Known "How to Enter" subsection headings, in the order they're checked —
 # longer/more-specific headings first so "Online Carrier Billing" matches
@@ -211,6 +223,41 @@ def _classify_channel(channel_type: EntryChannelType, body: str) -> EntryChannel
     )
 
 
+def _classify_google_form_channel(text: str, form_url: str) -> EntryChannel:
+    """Fallback classifier for the "prose + embedded Google Form, no 'How
+    to Enter' heading at all" template (see module docstring's point 2 and
+    docs/build-log.md, 2026-09-30). `channel_url_or_number` is the real
+    Google Form URL, not the talkSPORT page — draft.py/submit.py already
+    do `url = channel.channel_url_or_number or promo.source_url`, so this
+    alone routes entry-execution straight to the form.
+
+    Same conservative posture as every other classifier here: "uses a
+    Google Form" is not itself evidence of a free route. Only a genuine
+    free-indicator phrase in the page's own prose earns is_free_route=True;
+    otherwise this stays None/review_recommended=True."""
+    match = _FREE_INDICATOR_RE.search(text)
+    if match:
+        start = max(0, match.start() - 200)
+        excerpt = text[start : match.end() + 200]
+        return EntryChannel(
+            promotion_id="",
+            channel_type=EntryChannelType.WEB_FORM,
+            channel_url_or_number=form_url,
+            is_free_route=True,
+            cost_to_entrant_gbp=0.0,
+            review_recommended=False,
+            raw_excerpt=excerpt,
+        )
+    return EntryChannel(
+        promotion_id="",
+        channel_type=EntryChannelType.WEB_FORM,
+        channel_url_or_number=form_url,
+        is_free_route=None,
+        review_recommended=True,
+        raw_excerpt=text[:400],
+    )
+
+
 def parse_detail(html: str, title: str, source_url: str) -> tuple[Optional[Promotion], list[EntryChannel]]:
     soup = BeautifulSoup(html, "html.parser")
     main = soup.select_one("main") or soup.body
@@ -261,6 +308,15 @@ def parse_detail(html: str, title: str, source_url: str) -> tuple[Optional[Promo
     how_to_enter = _extract_how_to_enter_block(text)
     sections = _split_into_channel_sections(how_to_enter)
     channels = [_classify_channel(ctype, body) for ctype, body in sections]
+
+    if not channels:
+        # No "How to Enter" heading at all — the embedded-Google-Form
+        # template (see module docstring point 2 and google_forms.py).
+        # Confirmed live (2026-09-30): this fallback only fires because the
+        # classifier above genuinely finds nothing, not as a first resort.
+        form_url = google_forms.find_embedded_form_url(html)
+        if form_url:
+            channels = [_classify_google_form_channel(text, form_url)]
 
     return promo, channels
 

@@ -2104,3 +2104,202 @@ failing outright). Full suite: 198 passed, 1 skipped.
 Not yet re-verified live whether this actually gets a real draft all the
 way through — that's the natural next thing to watch for once this
 deploys and the scheduler's next tick finds something eligible.
+
+## 2026-09-30 — A new talkSPORT page template: embedded Google Forms, no "How to Enter" section at all
+
+Two real, currently-live competitions ("WIN a trip to Philadelphia for
+two", "Win up to £1k on White & Jordan") use a template `talksport.py`
+had never seen: no "How to Enter" heading at all, just prose pointing at
+a Google Form embedded via `<iframe class="authenticated-iframe" ...
+src="https://docs.google.com/forms/...">`. Confirmed live (real fetches,
+both pages, before writing anything) that this produced `channels = []`
+for both — not even an ambiguous channel got recorded, because
+`_extract_how_to_enter_block()`'s classifier only recognises the known
+"How to Enter" subsection headings, and this template has none.
+
+Two real gaps, both needed before these could be automated at all:
+
+1. **Discovery never saw them** (above). Fixed with a new small shared
+   helper, `stations/google_forms.py` (`find_embedded_form_url()`, a
+   regex over the raw HTML — not station-specific, since any future
+   adapter could hit the same third-party-embed pattern, mirroring
+   `browser.py`'s `dismiss_consent_banner()` precedent). `talksport.py`'s
+   `parse_detail()` now falls back to it only when the existing
+   "How to Enter" classifier genuinely finds nothing, building one
+   `WEB_FORM` channel whose `channel_url_or_number` is the **real Google
+   Form URL**, not the talkSPORT page — `draft.py`/`submit.py` already do
+   `url = channel.channel_url_or_number or promo.source_url`, so this
+   alone routes entry-execution to the right page.
+
+   Conservative classification, checked live rather than assumed: neither
+   real page's own prose contains "free to enter", "no purchase
+   necessary", "free of charge" or similar anywhere near the form mention
+   — "uses a Google Form" is not itself evidence of a free route. Both
+   correctly come back `is_free_route=None`/`review_recommended=True`,
+   same as every other ambiguous case this codebase already produces.
+
+   Also confirmed live: fetching the same Form URL with and without its
+   `?usp=publish-editor` query string both return 200 with materially the
+   same content, no redirect — so no URL normalisation was needed.
+
+2. **Entry-execution's shared form handling couldn't cope with a real
+   Google Form's DOM**, confirmed live (Playwright, passive DOM
+   inspection only, on both real pages) before writing anything:
+   - A field's question text lives in a separate `[role="heading"]` div,
+     never linked to its input via `id`/`label[for]`/`aria-label`/a
+     wrapping `<label>` — every existing `_resolve_label()` strategy
+     misses. Confirmed live that the actual shared ancestor is
+     `[role="listitem"]` (one per question, wrapping both the heading and
+     the input/radiogroup) — `_resolve_label()` gained one more fallback:
+     `el.closest('[role="listitem"]')` → its nested `[role="heading"]`
+     text. This only fires once every native strategy above it has
+     already failed, so normal HTML forms resolve exactly as before.
+   - Radio questions are `role="radio"` divs (grouped, on both real
+     forms, under a `role="radiogroup"` ancestor), not real
+     `<input type="radio">` — invisible to `extract_form_fields()`'s
+     `input, textarea, select` selector. Added a second pass,
+     `_add_option_group_fields()`, that finds `[role="radio"]`/
+     `[role="checkbox"]` elements, groups them by their common
+     `[role="listitem"]` ancestor (the same boundary the label fallback
+     uses — more robust than depending on Google's own `radiogroup` role,
+     which was never confirmed for a checkbox question, since neither
+     real form had one), and gathers each option's `aria-label` into an
+     `options` list the same shape `select` already produces.
+   - One live surprise found along the way: a Google Form's own
+     `<textarea>` (long-answer) field carries a generic `aria-label`
+     of literally `"Your answer"` on every such field regardless of the
+     real question — confirmed live on the Philadelphia form's "Address"
+     field. Trusting it would have been exactly the kind of
+     confident-looking-but-wrong label this project's classifiers already
+     avoid elsewhere, so `_resolve_label()` excludes that exact literal
+     value and falls through to the `[role="listitem"]` fallback instead,
+     which correctly returns "Address". (A field's real per-sub-input
+     `aria-label`s, like a date-of-birth field's "Day of the
+     month"/"Month"/"Year", are untouched by this exclusion.)
+   - The submit control is `<div role="button">Submit</div>` — matches
+     none of `click_submit()`'s three existing selectors. Added a fourth:
+     the `div[role="button"]` whose visible text is exactly `"Submit"`.
+     Both real forms also have a `"Clear form"` `div[role="button"]`
+     sibling, confirmed live to never match.
+   - `apply_fill_actions()`'s "check" action now inspects the resolved
+     element: a real `<input>` still uses `page.check()`, unchanged; our
+     own `[role="listitem"]` group-container marker instead clicks the
+     descendant option whose text reads "yes" (both real radio questions
+     on these two forms are Yes/No consent-style), falling back to the
+     first option if none matches. No change to the human-approval gate
+     or `needs_manual_input()` — a Google Form's Yes/No question flows
+     through the exact same `FieldClassification`/`checkbox_action` logic
+     every other field already does; this is new field *detection*, not
+     a new automation policy.
+
+All of `browser.py`'s changes are additive — every existing
+native-HTML-form test passes unchanged (`test_entry_execution_form_extraction.py`'s
+original cases, `test_entry_execution_routing.py`,
+`test_entry_execution_error_handling.py`).
+
+**New tests**: `tests/test_google_forms.py` (3 tests, against the two
+real fixture pages plus a negative case using an existing normal page);
+`tests/test_talksport_adapter.py` (+2, `parse_detail()` against both real
+fixtures, proving the `WEB_FORM` channel and its ambiguous classification);
+`tests/test_entry_execution_form_extraction.py` (+5, against a real
+captured/rendered Google Form snapshot — `page.content()` after real
+Playwright rendering of the live Philadelphia form, loaded back via
+`file://`, same technique `sample_entry_form.html`/`clean_entry_form.html`
+already use). One of the five deliberately does *not* call
+`click_submit()` itself — it replicates its selector/predicate logic
+inline to prove "Submit" matches and "Clear form" doesn't, without ever
+invoking a real click on a Google Form's submit control, fixture or
+live, which this work treated as a hard rule throughout, not just for
+the two real competition pages. Full suite: 208 passed, 1 skipped.
+
+**Live-verified end to end**, in this order: (1) real fixtures — both
+competition pages and the rendered Form — captured by actually fetching/
+rendering the real live pages, not written by hand; (2) a real
+`talksport.py` run (`STORAGE_BACKEND=local`) against the live site
+picked up both real competitions with a `WEB_FORM` channel pointing at
+the real Form URL, `review_recommended=True` on both, exactly as
+designed; (3) `browser.open_page()` + `extract_form_fields()` run for
+real against both live Form URLs (not just the offline fixture) found
+the identical fields/labels/options as the fixture-based tests, and the
+`div[role="button"]` submit-selector logic matched "Submit" only on both
+real live pages (never clicked); (4) `draft.draft_one()` run for real
+against the real discovered Philadelphia promotion — this sandbox has no
+`GEMINI_API_KEY` configured, so the real LLM mapping call itself
+correctly failed and produced a clean `FAILED` `EntryRecord`
+(`draft_screenshot_path=None`), the same fail-closed behaviour
+`test_entry_execution_error_handling.py` already covers; to still verify
+the rest of the pipeline for real, a one-off script (not part of the
+test suite) stubbed only the LLM call and `load_user_profile()` — with
+obviously-fake test data, never real PII, and against an isolated tmp
+storage dir, not this project's real `data/` — and ran everything else
+for real: real Playwright, real navigation to the real live Philadelphia
+Google Form, real field-fill, real screenshot. Reached
+`EntryStatus.DRAFTED` with a real saved screenshot showing all four
+profile fields correctly filled and the radio question correctly left
+unanswered (a deliberate `leave_unchecked` choice for that dry run, not a
+gap) — Submit visible in the screenshot, never clicked. Getting a real
+`GEMINI_API_KEY` into this environment (or provisioning one) is the
+natural next step to verify the LLM-mapping stage itself live, end to
+end, without a stub.
+
+## 2026-09-30 — Fixed a real correctness gap in the Google Form radio-question handling
+
+Reviewing the build above before deploying it surfaced a real, unshipped
+bug in the "click whichever option reads 'yes'" design described just
+above: `CheckboxAction` (`CHECK`/`LEAVE_UNCHECKED`) was built for a
+single toggle, where "check" only ever has one meaningful direction. A
+Yes/No radio question doesn't work that way — the LLM prompt already
+allows "check" for anything "confirming age or eligibility," and plenty
+of real eligibility questions have **"No" as the truthful, correct
+answer** for a genuine entrant (e.g. "Are you an employee of the
+promoter?", "Have you won a prize from us in the last 6 months?"). The
+schema had no way for the model to express a direction at all — only
+on/off — so the code's own hardcoded "click yes" default would have
+submitted false information on exactly this class of question, and this
+was never actually exercised against a real Gemini call (no
+`GEMINI_API_KEY` in the build environment) before being flagged.
+
+Fixed properly rather than papered over: `fill_plan.py` gains a new
+`FieldClassification.OPTION_GROUP`, distinct from `CHECKBOX` — the model
+must name the *specific* correct option (`selected_option`), copied
+verbatim from the field's own real, extracted options, never invented
+(`validate_mapping()` checks this the same way it already checks
+selectors). The system prompt (`llm_mapping.py`) now tells the model
+explicitly to get the *direction* right ("Are you 18 or over?" → "Yes",
+but "Are you an employee of the promoter?" → "No"), and to prefer
+`unmappable` over guessing a direction it isn't confident about.
+`validate_mapping()` also now **rejects** a `CHECKBOX` classification on
+any field that has real options attached at all — closing the loophole
+that let the old, dangerous path fire in the first place; a field with
+options must go through `OPTION_GROUP`.
+
+`browser.py`'s `_check_or_click_option()` (the "click yes" function) is
+gone — `apply_fill_actions()`'s `"check"` action is back to a plain
+`page.check()` exactly as before this whole feature started (it will
+only ever be called for a genuine single checkbox now, never a role
+group). A new `_select_option()` selects the one option
+`MappedField.selected_option` actually names — works for a Google Form's
+`role="radio"`/`role="checkbox"` groups and, as a natural side effect,
+for a native `<select>` dropdown too (`page.select_option` by label) —
+a pre-existing, previously-unaddressed gap (no native-select handling
+existed anywhere in this codebase before), fixed for free by the same
+mechanism rather than as separate scope creep.
+
+Tests rewritten to match: `tests/test_fill_plan.py` (+6) cover both
+directions explicitly (`selected_option="No"` on an eligibility question
+is the exact scenario the bug got wrong), an invented option being
+rejected, and the new `CHECKBOX`-with-real-options rejection.
+`tests/test_entry_execution_form_extraction.py`'s Google Form
+radio-question test was rewritten (the old one only proved a "yes"
+element could be *found*, never that a specific direction was actually
+selected) — the frozen offline fixture's own JS doesn't run (no live
+backend to react to a click), so verification uses a native
+`click`-event listener recording which specific DOM element received
+the click, proving "No" selects "No" and "Yes" selects "Yes", not a
+hardcoded default either way. Full suite: 215 passed, 1 skipped.
+
+Not yet re-verified live end-to-end with a real Gemini call (still no
+`GEMINI_API_KEY` in this environment) — the next real draft attempt
+against a Google Form field will be the first real test of whether the
+model actually uses `option_group` and gets the direction right in
+practice, not just that the code handles it correctly when it does.

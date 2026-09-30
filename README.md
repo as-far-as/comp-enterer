@@ -896,6 +896,73 @@ instead of trusting the first one to work. Full suite: 198 passed,
 1 skipped. Not yet re-verified live whether this actually gets a draft
 all the way through.
 
+## Update — a new talkSPORT template: competitions entered via an embedded Google Form
+
+Two real, currently-live talkSPORT competitions use a page template with
+no "How to Enter" section at all — just prose pointing at a Google Form
+embedded in an iframe. Confirmed live this produced no entry channel at
+all (`channels = []`), not even an ambiguous one, since the existing
+classifier only recognises known "How to Enter" subsection headings.
+
+Two real gaps, both found live before writing anything: (1) discovery
+never saw these competitions at all — fixed with a small new shared
+helper (`stations/google_forms.py`) that pulls the real Form URL out of
+the page's own static HTML, used as a fallback only when the existing
+classifier finds nothing; (2) entry-execution's shared form-handling
+code (`browser.py`) couldn't cope with a real Google Form's DOM — its
+question labels live in unlinked `[role="heading"]` divs, its radio
+questions are `role="radio"` divs (not real `<input>`s, so invisible to
+the existing field scan), and its submit control is a
+`<div role="button">`, none of which the existing selectors matched.
+All three gained an additive fallback (existing native-HTML-form
+behaviour is unchanged and fully covered by the existing test suite,
+still green).
+
+Conservative classification, checked live rather than assumed: neither
+real competition's own prose says "free to enter" or similar anywhere
+near the form, so both channels correctly stay ambiguous
+(`is_free_route=None`, `review_recommended=True`) — same posture as
+every other channel this codebase can't confidently classify. One live
+surprise along the way: a Google Form's own long-answer field carries a
+generic, non-per-question `aria-label` ("Your answer") that would have
+produced a confidently-wrong label if trusted — excluded specifically,
+falling through to the real question text instead.
+
+Live-verified end to end: a real `talksport.py` run against the live
+site now records a `WEB_FORM` channel pointing at the real Form URL for
+both competitions; real Playwright runs against both live Form pages
+(not just an offline fixture) found the right fields, labels and options,
+and correctly identified the Submit control without ever clicking it. A
+real `draft_one()` run against one of them reached `EntryStatus.DRAFTED`
+with a real saved screenshot of the live form correctly filled in
+(profile fields filled, the Yes/No radio question deliberately left
+unanswered) — this sandbox has no `GEMINI_API_KEY` configured, so that
+run stubbed only the LLM mapping call and the profile loader (fake test
+data, isolated tmp storage, nothing written to this project's real data)
+to exercise the rest of the real pipeline; a real, unstubbed run without
+a key correctly fails closed with a clean `FAILED` record instead, same
+as any other credential gap this project already handles this way. Full
+suite: 208 passed, 1 skipped. See docs/build-log.md, 2026-09-30, for the
+full detail.
+
+## Update — fixed a real correctness gap before deploying the above
+
+Reviewing that build before shipping it found a real bug: the "click
+whichever radio option reads 'yes'" default has no way to get an
+eligibility question right when "No" is the truthful answer (e.g. "Are
+you an employee of the promoter?"). Fixed properly — the LLM mapping
+schema gained `option_group`, where the model must name the *specific*
+correct option (validated against the field's own real options, never
+invented) instead of a blind on/off toggle, and the prompt now tells it
+explicitly to get the direction right or say `unmappable` if unsure.
+`CHECKBOX` classification is now rejected outright for any field that
+has real options attached, closing off the old, dangerous path
+entirely. As a side effect, native `<select>` dropdowns now get handled
+too — a pre-existing gap, fixed for free by the same mechanism. Full
+suite: 215 passed, 1 skipped. Not yet re-verified against a real Gemini
+call (still no `GEMINI_API_KEY` in this environment) — that's the
+natural next real-world test.
+
 ## Next steps (not built yet)
 
 Nothing from the original spec's core phases remains unbuilt. Open items

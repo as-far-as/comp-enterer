@@ -115,7 +115,11 @@ def _draft_one_inner(promo: Promotion, channel: EntryChannel, url: str, opener, 
             return record
 
         try:
-            mapping = validate_mapping(raw, known_selectors={f["selector"] for f in fields})
+            mapping = validate_mapping(
+                raw,
+                known_selectors={f["selector"] for f in fields},
+                known_options={f["selector"]: f["options"] for f in fields if f.get("options")},
+            )
         except ValueError as exc:
             record = EntryRecord(
                 promotion_id=promo.id,

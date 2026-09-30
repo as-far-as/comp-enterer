@@ -70,3 +70,55 @@ def test_nba_trip_post_route_is_free_and_sms_is_paid():
     for ch in channels:
         if ch.is_free_route is True:
             assert ch.review_recommended is False
+
+
+# --- embedded-Google-Form template (no "How to Enter" heading at all) -----
+#
+# Two real competitions captured live 2026-09-30 (see docs/build-log.md),
+# chosen because they're the ones that surfaced this gap: no "How to
+# Enter" section at all, just prose pointing at an embedded Google Form.
+# Confirmed live, at capture time, that neither page's own prose contains
+# any free-indicator phrase ("free to enter", "no purchase necessary",
+# "free of charge") anywhere near the form mention — so both are expected
+# to come back ambiguous (is_free_route=None, review_recommended=True),
+# which is the correct, conservative outcome here, not a gap in the test.
+
+
+def test_philadelphia_competition_gets_a_web_form_channel_pointing_at_the_real_google_form():
+    html = (FIXTURES / "talksport_detail_philadelphia_google_form.html").read_text()
+    promo, channels = parse_detail(
+        html, "WIN a trip to Philadelphia for two with Visit Pennsylvania!", "https://talksport.com/philadelphia"
+    )
+
+    assert promo is not None
+    assert len(channels) == 1
+    channel = channels[0]
+    assert channel.channel_type.value == "web_form"
+    # The real Google Form URL, not the talkSPORT page — this alone routes
+    # entry-execution to the right page (draft.py/submit.py already do
+    # `url = channel.channel_url_or_number or promo.source_url`).
+    assert channel.channel_url_or_number == (
+        "https://docs.google.com/forms/d/e/1FAIpQLScni1cfdexRmiIFAXCFwdRYR0trUAvzqVVN11vYWgH3TM0XNg/viewform"
+        "?usp=publish-editor"
+    )
+    # Conservative classification: no free-indicator phrase was found live
+    # on this real page, so this must stay ambiguous, never guessed free
+    # just because it uses a Google Form.
+    assert channel.is_free_route is None
+    assert channel.review_recommended is True
+
+
+def test_white_and_jordan_competition_gets_a_web_form_channel_pointing_at_the_real_google_form():
+    html = (FIXTURES / "talksport_detail_whitejordan_google_form.html").read_text()
+    promo, channels = parse_detail(html, "Win up to £1k on White & Jordan", "https://talksport.com/whitejordan")
+
+    assert promo is not None
+    assert len(channels) == 1
+    channel = channels[0]
+    assert channel.channel_type.value == "web_form"
+    assert channel.channel_url_or_number == (
+        "https://docs.google.com/forms/d/e/1FAIpQLSce1a325PND5g2PArgIx806HXptW1FBg7kNDxJ1RGFELRFuWQ/viewform"
+        "?usp=publish-editor"
+    )
+    assert channel.is_free_route is None
+    assert channel.review_recommended is True

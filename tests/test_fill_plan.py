@@ -143,3 +143,95 @@ def test_checkbox_missing_checkbox_action_is_rejected():
     }
     with pytest.raises(ValueError):
         validate_mapping(raw, known_selectors={"#terms"})
+
+
+# --- option_group — a real gap found and fixed 2026-09-30 ------------------
+#
+# A Yes/No radio question isn't a single toggle: "check" only has one
+# meaningful direction, but an eligibility question's correct answer can
+# genuinely be "No" (e.g. "Are you an employee of the promoter?"). These
+# tests cover the fix: option_group requires naming the specific correct
+# option, verified against the field's own real options, never guessed.
+
+
+def test_option_group_with_a_real_selected_option_validates_and_builds_an_action():
+    raw = {
+        "fields": [
+            {
+                "selector": "#age-check",
+                "field_label": "Are you 18 or over?",
+                "classification": "option_group",
+                "selected_option": "Yes",
+            },
+        ]
+    }
+    mapping = validate_mapping(
+        raw, known_selectors={"#age-check"}, known_options={"#age-check": ["Yes", "No"]}
+    )
+
+    assert needs_manual_input(mapping) is False
+    actions = build_fill_actions(mapping, _profile())
+    assert actions == [{"type": "select_option", "selector": "#age-check", "option_text": "Yes"}]
+
+
+def test_option_group_can_correctly_select_the_no_direction():
+    # The exact scenario the old "always click yes" bug got wrong.
+    raw = {
+        "fields": [
+            {
+                "selector": "#employee-check",
+                "field_label": "Are you an employee of the promoter?",
+                "classification": "option_group",
+                "selected_option": "No",
+            },
+        ]
+    }
+    mapping = validate_mapping(
+        raw, known_selectors={"#employee-check"}, known_options={"#employee-check": ["Yes", "No"]}
+    )
+
+    actions = build_fill_actions(mapping, _profile())
+    assert actions == [{"type": "select_option", "selector": "#employee-check", "option_text": "No"}]
+
+
+def test_option_group_with_an_invented_option_is_rejected():
+    raw = {
+        "fields": [
+            {
+                "selector": "#age-check",
+                "field_label": "Are you 18 or over?",
+                "classification": "option_group",
+                "selected_option": "Maybe",
+            },
+        ]
+    }
+    with pytest.raises(ValueError, match="not among its"):
+        validate_mapping(raw, known_selectors={"#age-check"}, known_options={"#age-check": ["Yes", "No"]})
+
+
+def test_option_group_missing_selected_option_is_rejected():
+    raw = {
+        "fields": [
+            {"selector": "#age-check", "field_label": "Are you 18 or over?", "classification": "option_group"},
+        ]
+    }
+    with pytest.raises(ValueError):
+        validate_mapping(raw, known_selectors={"#age-check"}, known_options={"#age-check": ["Yes", "No"]})
+
+
+def test_checkbox_classification_on_a_field_with_real_options_is_rejected():
+    # The other half of the fix: a field with real options must go through
+    # option_group, never checkbox — closes the loophole that let the old
+    # "click whichever says yes" behaviour fire at all.
+    raw = {
+        "fields": [
+            {
+                "selector": "#age-check",
+                "field_label": "Are you 18 or over?",
+                "classification": "checkbox",
+                "checkbox_action": "check",
+            },
+        ]
+    }
+    with pytest.raises(ValueError, match="should be option_group instead"):
+        validate_mapping(raw, known_selectors={"#age-check"}, known_options={"#age-check": ["Yes", "No"]})

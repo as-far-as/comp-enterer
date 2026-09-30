@@ -91,7 +91,61 @@ def extract_form_fields(page) -> list[dict]:
             }
         )
         index += 1
+
+    # A Google Form's radio-button/checkbox questions are role="radio"/
+    # role="checkbox" divs, not real <input>s — invisible to the
+    # input/textarea/select scan above. Confirmed live (2026-09-30) against
+    # two real talkSPORT competitions' embedded Google Forms: every
+    # question's options (real inputs and these role-based ones alike)
+    # share a single ancestor [role="listitem"] container — the same
+    # boundary _resolve_label()'s own new fallback (below) uses — so that's
+    # what this groups sibling options by, rather than Google's own
+    # internal role="radiogroup" wrapper (present for radio questions on
+    # both real fixtures, but never confirmed for a checkbox question,
+    # since neither real form had one).
+    index = _add_option_group_fields(page, fields, index)
     return fields
+
+
+def _add_option_group_fields(page, fields: list[dict], index: int) -> int:
+    option_elements = page.query_selector_all('[role="radio"], [role="checkbox"]')
+    for opt_el in option_elements:
+        container = opt_el.evaluate_handle(
+            "e => e.closest('[role=\"listitem\"]') || e.parentElement"
+        ).as_element()
+        if container is None:
+            continue
+        if container.get_attribute("data-rc-field"):
+            continue  # already turned into a field via an earlier sibling option in this same group
+
+        role = opt_el.get_attribute("role")
+        options = container.eval_on_selector_all(
+            '[role="radio"], [role="checkbox"]',
+            "els => els.map(e => (e.getAttribute('aria-label') || e.textContent || '').trim())",
+        )
+
+        marker = f"rc-field-{index}"
+        container.evaluate("(e, m) => e.setAttribute('data-rc-field', m)", marker)
+        selector = f'[data-rc-field="{marker}"]'
+
+        label = container.evaluate(
+            """e => {
+                const li = e.closest('[role="listitem"]') || e;
+                const h = li.querySelector('[role="heading"]');
+                return h ? h.innerText : null;
+            }"""
+        )
+
+        fields.append(
+            {
+                "selector": selector,
+                "label": (label or "").strip() or "(no label found)",
+                "input_type": role,
+                "options": options,
+            }
+        )
+        index += 1
+    return index
 
 
 def _resolve_label(page, el) -> str:
@@ -104,11 +158,41 @@ def _resolve_label(page, el) -> str:
                 return text
     for attr in ("aria-label", "placeholder"):
         value = el.get_attribute(attr)
-        if value and value.strip():
+        # "Your answer" excluded deliberately: confirmed live (2026-09-30)
+        # that a Google Form's own long-answer (<textarea>) question gets
+        # this exact literal aria-label on every such field regardless of
+        # the actual question text (the real Philadelphia-competition form
+        # has one long-answer field whose question is "Address" — its
+        # aria-label reads "Your answer" either way). Trusting it here
+        # would produce exactly the kind of confident-looking-but-wrong
+        # label this codebase's classifiers already avoid elsewhere — a
+        # short, per-sub-field aria-label like "Day of the month"/"Month"/
+        # "Year" (seen live on a date-of-birth field) is genuinely useful
+        # and unaffected by this exclusion.
+        if value and value.strip() and value.strip() != "Your answer":
             return value.strip()
     wrapping = el.evaluate("e => { const l = e.closest('label'); return l ? l.innerText : null; }")
     if wrapping and wrapping.strip():
         return wrapping.strip()
+
+    # Google Forms fallback: confirmed live (2026-09-30) against two real
+    # talkSPORT-embedded Google Forms that a field's question text is never
+    # linked via id/label[for]/aria-label/a wrapping <label> at all (every
+    # strategy above misses) — it lives in a separate [role="heading"] div,
+    # sharing a single ancestor [role="listitem"] container with the actual
+    # input. This only ever fires when every native strategy above has
+    # already failed, so a normal HTML form's labels resolve exactly as
+    # before.
+    heading_text = el.evaluate(
+        """e => {
+            const li = e.closest('[role="listitem"]');
+            if (!li) return null;
+            const h = li.querySelector('[role="heading"]');
+            return h ? h.innerText : null;
+        }"""
+    )
+    if heading_text and heading_text.strip():
+        return heading_text.strip()
     return ""
 
 
@@ -130,6 +214,46 @@ def apply_fill_actions(page, actions: list[dict]) -> None:
         elif action["type"] == "leave_unchecked":
             pass  # deliberate no-op — never call uncheck(); we only ever intervene
             # positively (checking a required consent box), never negatively
+        elif action["type"] == "select_option":
+            _select_option(page, action["selector"], action["option_text"])
+            page.wait_for_timeout(random.randint(200, 500))
+
+
+def _select_option(page, selector: str, option_text: str) -> None:
+    """Selects the one option fill_plan.py's LLM classification named as
+    correct — never a blind default. A real gap found and fixed
+    2026-09-30: an earlier version of this function clicked whichever
+    option's text read "yes" for any Google Form radio/checkbox field,
+    which is wrong for an eligibility question where "No" is the
+    genuinely correct answer for an eligible entrant (e.g. "Are you an
+    employee of the promoter?"). option_text always comes from
+    MappedField.selected_option, which validate_mapping() has already
+    confirmed is one of this field's own real, extracted options — never
+    invented here or by the model.
+
+    Works for a native <select> (page.select_option by visible label) and
+    for a Google Form role="radio"/role="checkbox" option-group (our own
+    data-rc-field marker on the question's [role="listitem"] container,
+    see extract_form_fields()'s _add_option_group_fields()) — matched
+    purely by clicking whichever descendant option's own text equals
+    option_text. Raises if the named option can't be found on the page —
+    refuses to guess a fallback, matching click_submit()'s own posture."""
+    el = page.query_selector(selector)
+    tag = el.evaluate("e => e.tagName.toLowerCase()") if el is not None else None
+    if tag == "select":
+        page.select_option(selector, label=option_text)
+        return
+
+    target = el.evaluate_handle(
+        """(c, text) => {
+            const opts = Array.from(c.querySelectorAll('[role="radio"], [role="checkbox"]'));
+            return opts.find(o => (o.getAttribute('aria-label') || o.textContent || '').trim() === text) || null;
+        }""",
+        option_text,
+    ).as_element()
+    if target is None:
+        raise RuntimeError(f"option {option_text!r} not found among the real options for {selector!r} on this page")
+    target.click()
 
 
 def click_submit(page) -> None:
@@ -140,6 +264,18 @@ def click_submit(page) -> None:
         if el:
             el.click()
             return
+
+    # Google Forms fallback, confirmed live (2026-09-30) against two real
+    # talkSPORT-embedded forms: the submit control is a <div role="button">
+    # Submit</div> — matches none of the three selectors above. Both real
+    # forms had exactly one div[role="button"] whose visible text is
+    # exactly "Submit"; a "Clear form" button (also a div[role="button"],
+    # present on both real forms) must never match.
+    for candidate in page.query_selector_all('div[role="button"]'):
+        if candidate.inner_text().strip() == "Submit":
+            candidate.click()
+            return
+
     raise RuntimeError("could not find a submit control on the page")
 
 
