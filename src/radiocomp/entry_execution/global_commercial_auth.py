@@ -42,6 +42,15 @@ below):**
    tab. Once the tab is active, `#login input[name="email"]`,
    `#login input[name="password"]`, and `#login button[type="submit"]`
    all become genuinely visible/interactable (confirmed live).
+
+   **The same sticky-footer interception affects the submit button too**
+   — found live on the first real login attempt (2026-10-06): email and
+   password filled correctly, but a position-based `page.click()` on
+   `#login button[type="submit"]` timed out after 30s of retries, with
+   Playwright's own trace showing the footer (and, intermittently, a
+   main-content container) repeatedly "intercepting pointer events" at
+   that exact position. Fixed the same way as the tab: a direct DOM
+   `.click()` via `page.locator(...).evaluate("el => el.click()")`.
 3. The tie-breaker question/options render **pre-login**, confirmed live
    as: `<label for="answer">`, a single shared
    `<input type="hidden" name="answer" value="">`, and (scoped, confirmed
@@ -154,7 +163,15 @@ def sign_in(page) -> None:
 
     page.fill(_EMAIL_SELECTOR, config.GLOBAL_COMMERCIAL_EMAIL)
     page.fill(_PASSWORD_SELECTOR, config.GLOBAL_COMMERCIAL_PASSWORD)
-    page.click(_SUBMIT_SELECTOR)
+    # A real gap found live (2026-10-06, the first real login attempt): the same
+    # sticky-footer pointer-event interception documented above for the tab also
+    # affects this submit button — a position-based page.click() timed out after 30s
+    # of retries, Playwright's own trace showing the footer (and, intermittently, a
+    # main-content container) repeatedly "intercepting pointer events" at this
+    # button's screen position. The fields were filled correctly; only the final
+    # click failed. Same fix as the tab click: a direct DOM .click() bypasses
+    # position-based hit-testing entirely.
+    page.locator(_SUBMIT_SELECTOR).evaluate("el => el.click()")
 
     try:
         page.wait_for_function(
