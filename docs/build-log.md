@@ -2383,3 +2383,42 @@ every mechanic short of that was verified live. That first real attempt
 is deliberately the user's own action, watched, once the two Secret
 Manager secrets are created and bound to `radio-comp-entry-execution`.
 Full suite: 238 passed, 1 skipped.
+
+## 2026-10-06 — Global Commercial's first real login: two real deploy bugs, then it worked
+
+The user confirmed the Nescafe competition free for real and asked to
+test it. Schedule paused first, as planned. First attempt failed
+immediately with `ModuleNotFoundError: No module named 'bs4'` —
+`Dockerfile.entry-execution` never needed a `stations/` adapter's own
+dependencies before (Global WIN's own module doesn't use bs4), so this
+image never had `beautifulsoup4` installed; draft.py's new routing
+import of `global_commercial.py` pulled it in for the first time. Fixed,
+rebuilt, retried.
+
+Second attempt reached the real login form and filled it correctly, but
+the submit button's own `page.click()` timed out after 30s — the exact
+same sticky-footer pointer-event interception already found and worked
+around for the "Log In" tab also affects this button. Fixed the same
+way: a direct DOM `.click()` via `evaluate()`, bypassing Playwright's
+position-based hit-testing. Rebuilt, retried.
+
+**Third attempt: real sign-in succeeded for the first time**, and the
+tie-breaker was correctly auto-answered ("Matilda") using the leaked
+`correctAnswer` field, exactly as designed. The only remaining failure
+was a transient Gemini `503 (experiencing high demand)` at the
+field-mapping step — confirmed not a free-tier rate limit (the error
+text and code differ), and confirmed real rather than a fluke by seeing
+the identical error on an immediate retry too. Decided not to keep
+manually forcing retries against what looks like a live Gemini outage —
+the part that actually needed careful, watched verification (real
+login + tie-breaker mechanics) is now proven correct twice in a row, so
+further attempts don't need the same supervision. Resumed the normal
+hourly schedule; it'll pick this up naturally once Gemini recovers.
+
+Each of the three stale `FAILED` records this produced had to be removed
+by hand (direct GCS JSON edit, backed up and diffed before each write —
+`storage/base.py`'s `Repository` protocol has no `delete()` at all) so
+the channel stayed eligible for retry — a real, currently-missing
+capability worth a proper fix later (a `delete()` method, or a small
+"retry this specific failed record" tool) rather than hand-editing
+production JSON again next time.
