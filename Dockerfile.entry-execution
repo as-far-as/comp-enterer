@@ -22,6 +22,15 @@
 # Anthropic account) — no other image needs it. Keep this list in sync
 # with what entry_execution/ and outcomes/ actually import, not with the
 # full dev requirements.txt.
+#
+# beautifulsoup4 added 2026-10-06: a real gap found live — draft.py/submit.py's
+# routing branch imports stations/global_commercial.py (for its STATION_NAME),
+# which imports bs4 at module level for its own T&Cs-text extraction. This
+# image never needed a stations/ adapter's own dependencies before, since
+# earlier routing (Global WIN) only needed global_win.py's STATION_NAME, and
+# that module doesn't use bs4 — confirmed live via a real
+# ModuleNotFoundError on the first real Global Commercial entry-execution
+# run, not caught by the local test suite (which never builds this image).
 FROM mcr.microsoft.com/playwright/python:v1.62.0-noble
 WORKDIR /app
 COPY src/ src/
@@ -29,6 +38,7 @@ RUN pip install --no-cache-dir \
     pydantic>=2.7 \
     httpx>=0.27 \
     python-dotenv>=1.0 \
+    beautifulsoup4>=4.12 \
     google-cloud-storage>=2.16 \
     google-genai>=2.22.0 \
     playwright==1.62.0
