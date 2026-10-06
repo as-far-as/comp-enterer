@@ -963,6 +963,39 @@ suite: 215 passed, 1 skipped. Not yet re-verified against a real Gemini
 call (still no `GEMINI_API_KEY` in this environment) — that's the
 natural next real-world test.
 
+## Update — a new Global platform: "Global Commercial" (`comp.*`)
+
+The user found a competition on a platform this project hadn't seen —
+Global's own in-house brand-sponsored competition tool
+(`comp.smoothradio.com` and sister domains), separate from Global WIN
+despite both being Global's own infrastructure, with its own separate
+account (the user already had one). Discovery needs no auth at all (the
+whole competition is embedded in the page's own server-rendered HTML);
+login is confirmed *not* CAPTCHA-gated, unlike registration on the same
+platform.
+
+A real, consequential decision, made by the user directly: this
+platform's own page leaks the tie-breaker question's correct answer in
+plain unauthenticated JSON. Asked explicitly whether to use it — **the
+user chose yes**. That's why this is the first source where automated
+submission can go all the way through rather than stopping at a
+manual-review flag, the way every other creative/skill-based question in
+this codebase is handled.
+
+Built: `stations/global_commercial.py` (discovery) and
+`entry_execution/global_commercial_auth.py` (login + auto-answer),
+mirroring Global WIN's routing pattern but materially simpler (login is
+inline on the competition page, no homepage-resolution dance needed). A
+real non-obvious UI quirk found and worked around: the login tab can't be
+clicked via a normal position-based Playwright click (a zero-height
+element, a sticky footer intercepting its child) — fixed with a real DOM
+`.click()` dispatched directly. A real bug caught by the build's own
+tests before shipping: `not campaign` treated an empty-but-present dict
+as missing (Python's `not {}` is `True`) — fixed to check for `None`
+specifically. Full suite: 238 passed, 1 skipped. Login itself is not yet
+verified against a real account — that's the user's own next action,
+watched, once the two new secrets exist.
+
 ## Next steps (not built yet)
 
 Nothing from the original spec's core phases remains unbuilt. Open items

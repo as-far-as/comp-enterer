@@ -1,16 +1,18 @@
 """
-Routing tests for draft.py/submit.py's Global-WIN-vs-everything-else
-branch (see entry_execution/global_win_auth.py's docstring and
-docs/build-log.md, 2026-09-28): a Global WIN promotion must go through
-global_win_auth.open_authenticated_page(), everything else through the
-existing browser.open_page(), and a Global WIN channel with no real
-credentials configured must fail closed (EntryStatus.FAILED) *before*
-ever opening a browser at all.
+Routing tests for draft.py/submit.py's per-source opener branches (see
+entry_execution/global_win_auth.py's and global_commercial_auth.py's own
+docstrings, and docs/build-log.md, 2026-09-28/2026-10-06): a Global WIN
+promotion must go through global_win_auth.open_authenticated_page(), a
+Global Commercial promotion through
+global_commercial_auth.open_authenticated_page(), everything else through
+the existing browser.open_page() — and either authenticated source with
+no real credentials configured must fail closed (EntryStatus.FAILED)
+*before* ever opening a browser at all.
 
 Both openers are faked here as no-op context managers yielding a plain
 sentinel object — this file is about which one gets called with which
 URL, not the live Playwright mechanics themselves (those were verified
-live instead — see global_win_auth.py's own docstring).
+live instead — see each auth companion's own docstring).
 browser.extract_form_fields()/click_submit() are stubbed too, so no real
 DOM/page object is ever needed and no live network call happens anywhere
 in this file.
@@ -24,7 +26,7 @@ from datetime import date
 import pytest
 
 from radiocomp import config
-from radiocomp.entry_execution import browser, draft, global_win_auth, submit
+from radiocomp.entry_execution import browser, draft, global_commercial_auth, global_win_auth, submit
 from radiocomp.models import (
     DiscoveredVia,
     EntryChannel,
@@ -34,7 +36,7 @@ from radiocomp.models import (
     Promotion,
     UserProfile,
 )
-from radiocomp.stations import global_win
+from radiocomp.stations import global_commercial, global_win
 from radiocomp.storage.base import get_repository
 from radiocomp.storage.user_profile_store import save_user_profile
 
@@ -60,8 +62,14 @@ def _fake_openers(monkeypatch):
         calls.append(("authenticated", url))
         yield object()
 
+    @contextmanager
+    def fake_open_commercial_page(url):
+        calls.append(("commercial", url))
+        yield object()
+
     monkeypatch.setattr(browser, "open_page", fake_open_page)
     monkeypatch.setattr(global_win_auth, "open_authenticated_page", fake_open_authenticated_page)
+    monkeypatch.setattr(global_commercial_auth, "open_authenticated_page", fake_open_commercial_page)
     return calls
 
 
@@ -227,3 +235,85 @@ def test_submit_one_fails_closed_when_global_win_credentials_are_unset(monkeypat
     assert calls == []  # never even tried to open a browser
     assert result.status == EntryStatus.FAILED
     assert result.submission_error == "GLOBAL_PLAYER_EMAIL/PASSWORD not set"
+
+
+# --- Global Commercial routing — draft.py ----------------------------------
+
+
+def test_draft_one_uses_commercial_opener_for_a_global_commercial_promotion(monkeypatch, tmp_path):
+    _use_local_storage(monkeypatch, tmp_path)
+    monkeypatch.setattr(config, "GLOBAL_COMMERCIAL_EMAIL", "test@example.com")
+    monkeypatch.setattr(config, "GLOBAL_COMMERCIAL_PASSWORD", "hunter2")
+    calls = _fake_openers(monkeypatch)
+    monkeypatch.setattr(browser, "extract_form_fields", lambda page: [])
+    promo, channel = _seed_promotion_and_channel(
+        global_commercial.STATION_NAME, "https://comp.smoothradio.com/nescafe-2026/8"
+    )
+
+    record = draft.draft_one(promo, channel)
+
+    assert calls == [("commercial", "https://comp.smoothradio.com/nescafe-2026/8")]
+    assert record.status == EntryStatus.SKIPPED
+
+
+def test_draft_one_fails_closed_when_global_commercial_credentials_are_unset(monkeypatch, tmp_path):
+    _use_local_storage(monkeypatch, tmp_path)
+    monkeypatch.setattr(config, "GLOBAL_COMMERCIAL_EMAIL", "")
+    monkeypatch.setattr(config, "GLOBAL_COMMERCIAL_PASSWORD", "")
+    calls = _fake_openers(monkeypatch)
+    promo, channel = _seed_promotion_and_channel(
+        global_commercial.STATION_NAME, "https://comp.smoothradio.com/nescafe-2026/8"
+    )
+
+    record = draft.draft_one(promo, channel)
+
+    assert calls == []  # never even tried to open a browser
+    assert record.status == EntryStatus.FAILED
+    assert record.submission_error == "GLOBAL_COMMERCIAL_EMAIL/PASSWORD not set"
+
+
+# --- Global Commercial routing — submit.py ---------------------------------
+
+
+def test_submit_one_uses_commercial_opener_for_a_global_commercial_promotion(monkeypatch, tmp_path):
+    _use_local_storage(monkeypatch, tmp_path)
+    monkeypatch.setattr(config, "TELEGRAM_BOT_TOKEN", "")
+    monkeypatch.setattr(config, "TELEGRAM_CHAT_ID", "")
+    monkeypatch.setattr(config, "GLOBAL_COMMERCIAL_EMAIL", "test@example.com")
+    monkeypatch.setattr(config, "GLOBAL_COMMERCIAL_PASSWORD", "hunter2")
+    _seed_user_profile()
+    calls = _fake_openers(monkeypatch)
+    monkeypatch.setattr(browser, "extract_form_fields", lambda page: [])
+    monkeypatch.setattr(browser, "click_submit", _raise_no_submit_control)
+    promo, channel = _seed_promotion_and_channel(
+        global_commercial.STATION_NAME, "https://comp.smoothradio.com/nescafe-2026/8"
+    )
+    record = _seed_submittable_entry_record(promo, channel)
+
+    result = submit.submit_one(record)
+
+    # The stub click_submit always fails — this test is only proving which
+    # opener got called with which url, not exercising a real submit.
+    assert calls == [("commercial", "https://comp.smoothradio.com/nescafe-2026/8")]
+    assert result.status == EntryStatus.FAILED
+    assert result.submission_error == "stub: no submit control"
+
+
+def test_submit_one_fails_closed_when_global_commercial_credentials_are_unset(monkeypatch, tmp_path):
+    _use_local_storage(monkeypatch, tmp_path)
+    monkeypatch.setattr(config, "TELEGRAM_BOT_TOKEN", "")
+    monkeypatch.setattr(config, "TELEGRAM_CHAT_ID", "")
+    monkeypatch.setattr(config, "GLOBAL_COMMERCIAL_EMAIL", "")
+    monkeypatch.setattr(config, "GLOBAL_COMMERCIAL_PASSWORD", "")
+    _seed_user_profile()
+    calls = _fake_openers(monkeypatch)
+    promo, channel = _seed_promotion_and_channel(
+        global_commercial.STATION_NAME, "https://comp.smoothradio.com/nescafe-2026/8"
+    )
+    record = _seed_submittable_entry_record(promo, channel)
+
+    result = submit.submit_one(record)
+
+    assert calls == []  # never even tried to open a browser
+    assert result.status == EntryStatus.FAILED
+    assert result.submission_error == "GLOBAL_COMMERCIAL_EMAIL/PASSWORD not set"

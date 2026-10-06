@@ -26,10 +26,10 @@ from pathlib import Path
 
 from .. import config
 from ..models import EntryChannel, EntryRecord, EntryStatus, Promotion
-from ..stations import global_win
+from ..stations import global_commercial, global_win
 from ..storage.base import get_repository
 from ..storage.user_profile_store import load_user_profile
-from . import browser, global_win_auth, notify_draft, screenshots
+from . import browser, global_commercial_auth, global_win_auth, notify_draft, screenshots
 from .fill_plan import FormMapping, build_fill_actions
 
 logger = logging.getLogger(__name__)
@@ -77,6 +77,21 @@ def submit_one(record: EntryRecord) -> EntryRecord:
         notify_draft.send_submission_result(promo, record)
         return record
 
+    is_global_commercial = promo.station_name_raw == global_commercial.STATION_NAME
+    if is_global_commercial and not (config.GLOBAL_COMMERCIAL_EMAIL and config.GLOBAL_COMMERCIAL_PASSWORD):
+        # Same hard-stop as draft.py's own Global Commercial branch, checked again
+        # independently here for the same reason as the Global WIN check above.
+        record.status = EntryStatus.FAILED
+        record.submission_error = "GLOBAL_COMMERCIAL_EMAIL/PASSWORD not set"
+        entry_repo.upsert(record)
+        logger.error(
+            "EntryRecord %s is a Global Commercial channel but GLOBAL_COMMERCIAL_EMAIL/PASSWORD are unset, "
+            "refusing to submit",
+            record.id,
+        )
+        notify_draft.send_submission_result(promo, record)
+        return record
+
     profile = load_user_profile()
     if profile is None:
         record.status = EntryStatus.FAILED
@@ -84,7 +99,12 @@ def submit_one(record: EntryRecord) -> EntryRecord:
         entry_repo.upsert(record)
         return record
 
-    opener = global_win_auth.open_authenticated_page if is_global_win else browser.open_page
+    if is_global_win:
+        opener = global_win_auth.open_authenticated_page
+    elif is_global_commercial:
+        opener = global_commercial_auth.open_authenticated_page
+    else:
+        opener = browser.open_page
 
     try:
         return _submit_one_inner(record, promo, channel, profile, opener, entry_repo)

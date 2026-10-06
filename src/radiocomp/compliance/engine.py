@@ -58,6 +58,11 @@ SHARED_LIMIT_NETWORKS: dict[str, frozenset[str]] = {
             # Global-network by shared_network_for() at all. Same pattern
             # as "make me a winner (bauer)" below for Bauer.
             "global win",
+            # Same pattern again, for stations/global_commercial.py's own
+            # station_name_raw — a separate Global platform (comp.<brand>),
+            # distinct from Global WIN/winplus.* above, but still part of
+            # Global's own cross-brand entry-limit network.
+            "global commercial",
         }
     ),
     "Bauer": frozenset(

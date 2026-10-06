@@ -2303,3 +2303,83 @@ Not yet re-verified live end-to-end with a real Gemini call (still no
 against a Google Form field will be the first real test of whether the
 model actually uses `option_group` and gets the direction right in
 practice, not just that the code handles it correctly when it does.
+
+## 2026-10-05/06 — A new Global platform found by the user: "Global Commercial" (`comp.*`)
+
+The user found a real competition on a platform this project had never
+seen: `comp.smoothradio.com/nescafe-2026/8`, Global's own in-house
+"brand-sponsored competition" tool (internal name "Global React Studio"/
+"Global Commercial" — Next.js + Sanity CMS, served per-brand at
+`comp.<brand>.co.uk`/`.com`), entirely separate from the already-built
+Global WIN/`winplus.*` platform despite both being Global's own
+infrastructure. The user had already manually created a separate account
+on it (confirmed: a distinct Gigya apiKey from Global Player's) and asked
+for discovery + full login/submit automation reusing that account.
+
+Two rounds of read-only live investigation (no form ever submitted, no
+CAPTCHA touched) confirmed everything needed to build this safely:
+
+- **Discovery needs no auth at all.** The whole competition — title,
+  dates, T&Cs URL, the tie-breaker question/options, even the correct
+  answer — is embedded in the page's own server-rendered HTML as Next.js
+  "flight data", readable with a plain `httpx` GET.
+- **Login is not CAPTCHA-gated**, confirmed two ways: no reCAPTCHA
+  markup renders on the login panel in either tab state, and the login
+  widget's own JS (`emailSignIn()`) posts a bare `{email, password}` with
+  no recaptcha field at all — unlike registration (`emailRegister()`),
+  which does carry one. Real login POSTs to
+  `https://www.smoothradio.com/api/derrick/2/email-sign-in/`,
+  cookie-session based.
+- **A real, consequential, user-made call**: this platform's own page
+  leaks the tie-breaker's correct answer in plain unauthenticated JSON
+  (`entryMultipleChoice.correctAnswer`). Asked the user directly whether
+  this should ever be used to auto-select the right option, rather than
+  always treating a multiple-choice question as needing manual input (the
+  more conservative default this project would otherwise apply, matching
+  how a creative tie-breaker is always flagged). **The user chose to use
+  it** — stated here plainly as their own explicit decision, not an
+  inference. This is why this one source can go all the way through
+  real, automated submission rather than draft-and-flag like every other
+  creative/skill-based question in this codebase.
+
+**Built**: `stations/global_commercial.py` (discovery — parses the
+Next.js flight-data format via a small string-aware brace/bracket
+counter rather than a full RSC deserialisation; conservative free/paid
+classification, same "no real paid signal seen yet" posture as every
+other adapter — the one real competition found has no free/paid language
+in its own T&Cs, so it correctly stays ambiguous rather than being
+assumed free); `entry_execution/global_commercial_auth.py` (the
+authenticated companion — materially simpler than Global WIN's, since
+login happens inline on the competition page itself, no homepage/
+click-through resolution needed). Routing in `draft.py`/`submit.py`
+follows the exact same `promo.station_name_raw == STATION_NAME` branch
+pattern, failing closed to `FAILED` before opening a browser if
+`GLOBAL_COMMERCIAL_EMAIL`/`PASSWORD` are unset.
+
+**A real, non-obvious UI quirk found and worked around**: the "Log In"
+tab (`#select-login`) can't be clicked via a normal Playwright
+position-based click — the `<li>` itself has a zero-height bounding box,
+and its `<a>` child is visually covered by a sticky page footer even with
+`force=True` (confirmed neither attempt actually flipped the tab's own
+"active" CSS class). The one mechanism confirmed to work is a real DOM
+`.click()` dispatched directly via `page.locator(...).evaluate("el =>
+el.click()")`, bypassing Playwright's position-based hit-testing
+entirely.
+
+**A real gap found and fixed during review, before this shipped**:
+`parse_detail()`'s guard clause used `not campaign` to check for a
+missing campaign block, but Python's `not {}` is `True` — an empty-but-*
+present* campaign dict (a real, valid shape for a test isolating
+title-resolution behaviour) was wrongly treated as "no campaign at all."
+Fixed to check `campaign is None` specifically. Caught by two tests the
+build itself wrote, which is exactly what they were for.
+
+**What remains genuinely unverified**: the real login submission itself
+(no `GLOBAL_COMMERCIAL_EMAIL`/`PASSWORD` exist in any environment this
+was built in) and, downstream of that, whether `sign_in()`'s own
+success check (the Gigya widget's `step` attribute leaving its known
+pre-login value) actually fires correctly on a real successful login —
+every mechanic short of that was verified live. That first real attempt
+is deliberately the user's own action, watched, once the two Secret
+Manager secrets are created and bound to `radio-comp-entry-execution`.
+Full suite: 238 passed, 1 skipped.

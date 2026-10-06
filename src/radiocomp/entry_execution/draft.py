@@ -13,10 +13,10 @@ from pathlib import Path
 
 from .. import config
 from ..models import EntryChannel, EntryRecord, EntryStatus, Promotion
-from ..stations import global_win
+from ..stations import global_commercial, global_win
 from ..storage.base import get_repository
 from ..storage.user_profile_store import load_user_profile
-from . import browser, global_win_auth, llm_mapping, notify_draft, screenshots
+from . import browser, global_commercial_auth, global_win_auth, llm_mapping, notify_draft, screenshots
 from .fill_plan import build_fill_actions, needs_manual_input, validate_mapping
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,33 @@ def draft_one(promo: Promotion, channel: EntryChannel) -> EntryRecord:
         )
         return record
 
-    opener = global_win_auth.open_authenticated_page if is_global_win else browser.open_page
+    is_global_commercial = promo.station_name_raw == global_commercial.STATION_NAME
+    if is_global_commercial and not (config.GLOBAL_COMMERCIAL_EMAIL and config.GLOBAL_COMMERCIAL_PASSWORD):
+        # Same hard-stop as the Global WIN branch above — Global Commercial's own
+        # login is inline on the competition page itself (see
+        # global_commercial_auth.py's docstring), but still required before anything
+        # can be drafted.
+        record = EntryRecord(
+            promotion_id=promo.id,
+            channel_type=channel.channel_type,
+            channel_id=channel.id,
+            status=EntryStatus.FAILED,
+            submission_error="GLOBAL_COMMERCIAL_EMAIL/PASSWORD not set",
+        )
+        entry_repo.add(record)
+        logger.error(
+            "Promotion %s is a Global Commercial channel but GLOBAL_COMMERCIAL_EMAIL/PASSWORD are unset, "
+            "refusing to draft",
+            promo.id,
+        )
+        return record
+
+    if is_global_win:
+        opener = global_win_auth.open_authenticated_page
+    elif is_global_commercial:
+        opener = global_commercial_auth.open_authenticated_page
+    else:
+        opener = browser.open_page
 
     try:
         return _draft_one_inner(promo, channel, url, opener, entry_repo)

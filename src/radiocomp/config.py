@@ -63,6 +63,18 @@ TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
 GLOBAL_PLAYER_EMAIL = os.environ.get("GLOBAL_PLAYER_EMAIL", "")
 GLOBAL_PLAYER_PASSWORD = os.environ.get("GLOBAL_PLAYER_PASSWORD", "")
 
+# A real personal Global Commercial (comp.<brand>.co.uk/.com) login — a distinct
+# Gigya account from Global Player's own above (confirmed live 2026-10-05/06 that
+# this platform's own Gigya apiKey differs from Global Player's, as expected given
+# the user's own account there is separate). Only read by
+# entry_execution/global_commercial_auth.py's sign_in(), itself only ever called from
+# draft.py/submit.py's routing branch for a Global Commercial channel — never from
+# scheduled discovery (stations/global_commercial.py's own ingest() needs no
+# credentials at all, same posture as every other adapter). Same real
+# account-suspension risk/accepted-risk framing as GLOBAL_PLAYER_EMAIL/PASSWORD above.
+GLOBAL_COMMERCIAL_EMAIL = os.environ.get("GLOBAL_COMMERCIAL_EMAIL", "")
+GLOBAL_COMMERCIAL_PASSWORD = os.environ.get("GLOBAL_COMMERCIAL_PASSWORD", "")
+
 # Polite crawling defaults — see aggregators/loquax.py for why this matters.
 USER_AGENT = os.environ.get(
     "RADIOCOMP_USER_AGENT",
