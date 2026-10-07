@@ -148,6 +148,14 @@ class EntryRecord(BaseModel):
     submission_error: Optional[str] = None  # human-readable reason for a FAILED status — distinct
     # from compliance_note, which is about eligibility, not execution
 
+    # INSTAGRAM manual-entry flow only (notify/instagram_digest.py) — see
+    # docs/instagram-scoping-research.md, sections 8 and 10.
+    skip_reason: Optional[str] = None  # e.g. "needs_tags" — the user has opted out of tagging friends,
+    # and recording why (not just that) a giveaway was skipped is what measures how common that is
+    observed_comment_bucket: Optional[str] = None  # one-tap range of the post's comment count at entry
+    # time (see notify/callback_data.COMMENT_BUCKETS) — the direct entrant-volume signal that replaces
+    # the scoping doc's assumed ranges with real data
+
 
 class Outcome(BaseModel):
     id: str = Field(default_factory=_new_id)
@@ -157,6 +165,17 @@ class Outcome(BaseModel):
     claim_deadline: Optional[date] = None
     proof_required: Optional[str] = None  # e.g. "ID + voice match for on-air win"
     notes: Optional[str] = None
+
+
+class DigestRecord(BaseModel):
+    """One per day the Instagram digest ran (notify/instagram_digest.py) —
+    both the "already sent today?" guard for an hourly scheduled job, and
+    the record of which promotions were suggested, so none is suggested
+    twice."""
+
+    id: str = Field(default_factory=_new_id)
+    sent_on: date
+    promotion_ids: list[str] = Field(default_factory=list)
 
 
 class UserProfile(BaseModel):

@@ -17,6 +17,9 @@ Three distinct flows share the same "a"/"s"/"w"/"l" callback_data encoding
   - an outcome Won/No response ("w"/"l") — id2 is an entry_id, not a
     channel_id; dispatched before any promotion/channel lookup since
     outcome callbacks don't carry one.
+  - an Instagram digest Entered/Needs tags tap ("e"/"t"), and the
+    comment-count range asked right after Entered ("c0".."cx") — see
+    notify/instagram_digest.py. Skip on a digest item is the ordinary "s".
 
 A draft confirmation is sent as a photo (send_photo), so its message has
 no "text", only a "caption" — every helper here threads an is_photo flag
@@ -32,7 +35,7 @@ from datetime import datetime
 from ..compliance.engine import check_promotion
 from ..models import EntryChannel, EntryChannelType, EntryRecord, EntryStatus, Outcome, Promotion
 from ..notify import telegram_client
-from ..notify.callback_data import parse_callback_data
+from ..notify.callback_data import COMMENT_BUCKETS, build_callback_data, parse_callback_data
 from ..storage.base import get_repository
 
 logger = logging.getLogger(__name__)
@@ -62,6 +65,10 @@ def handle_callback_query(callback_query: dict) -> None:
 
     if action in ("w", "l"):
         _handle_outcome_response(callback_id, chat_id, message_id, original_text, is_photo, action, id1, id2)
+    elif action in ("e", "t"):
+        _handle_instagram_decision(callback_id, chat_id, message_id, original_text, action, id1, id2)
+    elif action in COMMENT_BUCKETS:
+        _handle_comment_bucket(callback_id, chat_id, message_id, original_text, action, id2)
     else:
         _handle_entry_decision(callback_id, chat_id, message_id, original_text, is_photo, action, id1, id2)
 
@@ -175,16 +182,102 @@ def _handle_outcome_response(
     _clear_buttons(chat_id, message_id, original_text, suffix, is_photo)
 
 
-def _clear_buttons(chat_id, message_id, original_text: str, suffix: str, is_photo: bool = False) -> None:
+def _handle_instagram_decision(
+    callback_id: str, chat_id, message_id, original_text: str, action: str, promotion_id: str, channel_id: str
+) -> None:
+    """"e" = the user entered by hand: recorded straight to SUBMITTED (there's
+    no draft/approve stage — nothing here ever touches Instagram), which is
+    also what lets outcomes/reminder.py ask "Did you win?" after the deadline
+    with no Instagram-specific code. The message then swaps to the one-tap
+    comment-count question. "t" = skipped because it needs tagging friends."""
+    promo_repo = get_repository("promotions", Promotion)
+    channel_repo = get_repository("entry_channels", EntryChannel)
+    entry_repo = get_repository("entry_records", EntryRecord)
+
+    promo = promo_repo.get(promotion_id)
+    channel = channel_repo.get(channel_id)
+    if promo is None or channel is None:
+        telegram_client.answer_callback_query(callback_id, "No longer available")
+        _clear_buttons(chat_id, message_id, original_text, "\n\n(no longer available)")
+        return
+
+    existing = [r for r in entry_repo.list() if r.promotion_id == promotion_id and r.channel_id == channel_id]
+    if existing:
+        telegram_client.answer_callback_query(callback_id, "Already recorded")
+        suffix = "\n\n✅ Entered" if existing[0].status == EntryStatus.SUBMITTED else "\n\n⏭ Skipped"
+        _clear_buttons(chat_id, message_id, original_text, suffix)
+        return
+
+    check = check_promotion(promo, list(promo_repo.list()), list(entry_repo.list()))
+    now = datetime.utcnow()
+    if action == "e":
+        record = EntryRecord(
+            promotion_id=promotion_id,
+            channel_type=channel.channel_type,
+            channel_id=channel_id,
+            status=EntryStatus.SUBMITTED,
+            approved_at=now,
+            submitted_at=now,
+            compliance_note=check.note,
+        )
+    else:
+        record = EntryRecord(
+            promotion_id=promotion_id,
+            channel_type=channel.channel_type,
+            channel_id=channel_id,
+            status=EntryStatus.SKIPPED,
+            skip_reason="needs_tags",
+            compliance_note=check.note,
+        )
+    entry_repo.add(record)
+    logger.info("Recorded Instagram %s for promotion %s", "entry" if action == "e" else "needs-tags skip", promotion_id)
+
+    if action == "t":
+        telegram_client.answer_callback_query(callback_id, "Skipped — needs tags")
+        _clear_buttons(chat_id, message_id, original_text, "\n\n🏷 Skipped (needs tags)")
+        return
+
+    telegram_client.answer_callback_query(callback_id, "Entered ✅")
+    buttons = [
+        {"text": label, "callback_data": build_callback_data(bucket, promotion_id, record.id)}
+        for bucket, label in COMMENT_BUCKETS.items()
+    ]
+    question = "\n\n✅ Entered. Roughly how many comments did the post have?"
+    _clear_buttons(chat_id, message_id, original_text, question, reply_markup={"inline_keyboard": [buttons[:4], buttons[4:]]})
+
+
+def _handle_comment_bucket(callback_id: str, chat_id, message_id, original_text: str, action: str, entry_id: str) -> None:
+    entry_repo = get_repository("entry_records", EntryRecord)
+    entry = entry_repo.get(entry_id)
+    if entry is None:
+        telegram_client.answer_callback_query(callback_id, "No longer available")
+        _clear_buttons(chat_id, message_id, original_text, "\n\n(no longer available)")
+        return
+
+    if entry.observed_comment_bucket is None:
+        entry.observed_comment_bucket = COMMENT_BUCKETS[action]
+        entry_repo.upsert(entry)
+        logger.info("Recorded comment bucket %s for entry %s", entry.observed_comment_bucket, entry_id)
+
+    telegram_client.answer_callback_query(callback_id, "Noted")
+    _clear_buttons(chat_id, message_id, original_text, f" {entry.observed_comment_bucket}")
+
+
+def _clear_buttons(
+    chat_id, message_id, original_text: str, suffix: str, is_photo: bool = False, reply_markup: dict | None = None
+) -> None:
+    """Appends `suffix` and removes the buttons — or, with reply_markup,
+    swaps in a new set (the Instagram flow's follow-up question)."""
     if chat_id is None or message_id is None:
         return
     try:
         # Explicit empty keyboard — editMessageText/editMessageCaption leave
         # the old buttons live if reply_markup is omitted, they don't clear
         # them on their own.
+        markup = reply_markup if reply_markup is not None else {"inline_keyboard": []}
         if is_photo:
-            telegram_client.edit_message_caption(chat_id, message_id, original_text + suffix, reply_markup={"inline_keyboard": []})
+            telegram_client.edit_message_caption(chat_id, message_id, original_text + suffix, reply_markup=markup)
         else:
-            telegram_client.edit_message_text(chat_id, message_id, original_text + suffix, reply_markup={"inline_keyboard": []})
+            telegram_client.edit_message_text(chat_id, message_id, original_text + suffix, reply_markup=markup)
     except Exception:
         logger.exception("Failed to edit message %s in chat %s after recording decision", message_id, chat_id)

@@ -2582,3 +2582,53 @@ the Loquax workflow use `STORAGE_BACKEND=gcs`, not Firestore.
 Full suite: 274 passed, 1 skipped, in roughly half the previous time,
 because the tests no longer make network calls to Firestore. The 3 stray
 Firestore records were left in place pending the user's OK to delete.
+
+## 2026-10-07 — Instagram experiment, step 2a: daily digest (not yet deployed)
+
+**`notify/instagram_digest.py`.** Once a day, on the first discovery run
+at or after 07:00 UTC, it sends:
+- **A header message** with the day's count. It also lists "draws due"
+  (giveaways you entered that closed 1–3 days ago), with a reminder to
+  check Instagram DMs *including Message Requests* and the
+  never-pay-to-claim rule.
+- **Up to 5 suggestions,** each with ✅ Entered / 🏷 Needs tags / ⏭ Skip
+  buttons.
+
+**Selection.** Only Instagram post links are included, which drops
+ThePrizeFinder's Facebook and web-page rows. A giveaway must also be not
+closed, not answered and never suggested before. Promoters previously
+marked "needs tags" go last, then soonest-closing first. There's no "small
+promoters first" ranking, because the listing has no size signal and
+inventing one would be a guess. Unanswered suggestions are never re-sent.
+A new `DigestRecord` collection, `instagram_digests`, is both the
+once-a-day guard and the "already suggested" record. It's written before
+sending, so a partial Telegram failure can't double-send.
+
+**Webhook.**
+- New callback actions `e` and `t`, plus `c0`–`cx` for the comment-count
+  range.
+- **Entered** goes straight to `SUBMITTED` (there's no draft stage, and
+  nothing touches Instagram). That means `outcomes/reminder.py`'s existing
+  "Did you win?" check covers Instagram entries with no new code. The
+  message then swaps to one-tap comment-count buttons (<50 / 50–200 /
+  200–1000 / 1000+ / not checked), stored on
+  `EntryRecord.observed_comment_bucket`.
+- **Needs tags** records `SKIPPED` with `skip_reason="needs_tags"`.
+- **Skip** is the existing `s`.
+- Verified the submission engine can't pick these up: it only acts on
+  records that are both `WEB_FORM` and `APPROVED`.
+
+**`run_discovery.py`.** The Instagram adapter is now registered, but its
+new promotions are kept out of `notify_new_promotions` via
+`_DIGEST_ONLY_ADAPTERS`. The digest runs after that notification step.
+
+Tests: 7 new in `tests/test_instagram_digest.py`. Full suite: 281 passed,
+1 skipped.
+
+Needs deploying: the webhook Service first (so buttons work), then the
+discovery Job.
+
+Step 2b (share a post to the bot) is still to do. It needs a message
+handler plus re-running `setWebhook` with `allowed_updates` extended to
+include `"message"`, which is a manual step for the user since it needs
+the raw token.

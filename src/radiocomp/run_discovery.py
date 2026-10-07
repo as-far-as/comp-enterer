@@ -26,6 +26,11 @@ stations/seed_southeast_london.py) also isn't run here — that's a
 one-off/occasional maintenance task, not something that needs repeating
 every scheduled pass.
 
+Instagram giveaways (aggregators/theprizefinder_instagram.py) are stored
+like any other promotion but deliberately kept out of that per-promotion
+notification — they reach you through notify/instagram_digest.py's capped
+once-a-day digest instead, sent from the first run after 07:00 UTC.
+
 Also runs stations/watch_for_competitions.py's lightweight watcher (see
 that module's docstring) against the seed_southeast_london.py stations —
 4 plain HTTP GETs, negligible added cost, folded in here rather than a
@@ -55,7 +60,7 @@ def _load_adapters() -> list[tuple[str, object]]:
     built (except loquax — see module docstring). A fresh list per call,
     not a module-level global appended to, so calling this more than once
     (e.g. from a test) can't duplicate entries."""
-    from .aggregators import theprizefinder
+    from .aggregators import theprizefinder, theprizefinder_instagram
     from .stations import bauer_makemeawinner, global_commercial, global_win, radioexe, talksport, wayin
 
     return [
@@ -66,7 +71,13 @@ def _load_adapters() -> list[tuple[str, object]]:
         ("wayin", wayin.ingest),
         ("global_win", global_win.ingest),
         ("global_commercial", global_commercial.ingest),
+        ("theprizefinder_instagram", theprizefinder_instagram.ingest),
     ]
+
+
+# Adapters whose new promotions are surfaced through the capped daily
+# Instagram digest (notify/instagram_digest.py), not one message each.
+_DIGEST_ONLY_ADAPTERS = {"theprizefinder_instagram"}
 
 
 def main() -> int:
@@ -81,7 +92,8 @@ def main() -> int:
             # talksport/radioexe return (promotions, channels); the
             # aggregators return just promotions — either way, get the list.
             new_promotions = outcome[0] if isinstance(outcome, tuple) else outcome
-            all_new_promotions.extend(new_promotions)
+            if label not in _DIGEST_ONLY_ADAPTERS:
+                all_new_promotions.extend(new_promotions)
             results[label] = len(new_promotions)
             logger.info("%s: %d new promotion(s)", label, len(new_promotions))
         except Exception:
@@ -102,6 +114,13 @@ def main() -> int:
         # A Telegram outage isn't a discovery failure — never let this
         # flip the exit code the scheduler watches.
         logger.exception("Notification step failed")
+
+    try:
+        from .notify.instagram_digest import send_daily_digest
+
+        send_daily_digest()
+    except Exception:
+        logger.exception("Instagram digest step failed")
 
     try:
         from .stations import watch_for_competitions
