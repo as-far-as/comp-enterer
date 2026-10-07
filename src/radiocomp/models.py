@@ -40,6 +40,9 @@ class EntryChannelType(str, Enum):
     WHATSAPP = "whatsapp"  # "message your answer on WhatsApp <number>" — same discovery as EMAIL above; neither
     # was anticipated by the original spec, and no automation path touches either, so they're modelled for
     # accurate classification/review purposes only, not as a target for future auto-entry
+    INSTAGRAM = "instagram"  # like/follow/comment on a post — manual-only, permanently: Instagram's Terms ban
+    # automated access even when logged in (see docs/instagram-scoping-research.md, section 1), so no code path
+    # likes, follows, comments or fetches instagram.com. Tracked so the user can enter by hand.
 
 
 class DiscoveredVia(str, Enum):

@@ -2490,3 +2490,95 @@ Overall web-form entry outcomes at this point: 1 `submitted` (the original
 WIN / Google Form / Global Commercial automation has yet produced a
 completed draft (failures: 15 click-through, 7 Global Player sign-in, 9
 Gemini/LLM, 1 other).
+
+## 2026-10-07 — Scoping: Instagram giveaways as an extension (research only, nothing built)
+
+Asked whether the project's approach generalises. Lotteries and betting
+syndicates were ruled out as negative-EV by construction (with matched
+betting noted as the one free-money analogue). Instagram giveaways were
+picked to scope instead. Full write-up: `docs/instagram-scoping-research.md`.
+
+Headline findings:
+- **Entry stays manual.** Instagram's Terms ban automated access even when
+  logged in, and Meta's spam standard covers high-frequency *manual*
+  engagement too.
+- **Discovery is via aggregators, not Instagram.** ThePrizeFinder's
+  `/competitions/instagram-competitions` (about 104 live listings, plain
+  httpx, rows link straight to the post) is a near-drop-in variant of
+  `theprizefinder.py`. Loquax only shows the 10 newest, and hashtags and
+  the Graph API aren't viable as a primary source.
+- **Modest EV.** The base case is about £130/yr from aggregator-listed
+  giveaways, calibrated against a comper benchmark of 1 win per 750–1,500
+  entries. Adding giveaways the user forwards to the bot takes it to about
+  £230/yr. That forwarded tier (unlisted local-business posts) is
+  uncalibrated and is the first thing to measure.
+- **Scams are a new risk class** compared with radio, and need a quality
+  and scam screen.
+
+Awaiting the user's decision on the open questions in section 9 before any
+spec or code.
+
+## 2026-10-07 — Instagram experiment, step 1: ThePrizeFinder Instagram adapter
+
+User decisions on the scoping doc's open questions (recorded in its
+section 10): no tagging friends, Instagram only (no Facebook/TikTok), no
+Graph API for now, under an hour a week, and forwarding only if it's
+effortless. Agreed to build it as a 4–6 week experiment.
+
+Built `src/radiocomp/aggregators/theprizefinder_instagram.py` plus a new
+`EntryChannelType.INSTAGRAM` (manual-only, permanently; automation still
+gates on `WEB_FORM` alone). It paginates
+`/competitions/instagram-competitions?page=N`, reading the last page from
+the pager, with a 20-page hard cap and a 1s delay between pages. It only
+ever fetches theprizefinder.com, never instagram.com.
+
+- **Classification:** every channel is stored `is_free_route=None`,
+  `review_recommended=True`, because the listing never reveals the
+  mechanic.
+- **URLs and dedup:** post URLs come in several shapes, so they are
+  canonicalised to `instagram.com/p/<shortcode>/`. Dedup is keyed on the
+  shortcode, so a post forwarded to the bot later will resolve to the same
+  Promotion.
+- **Rows that don't link to a post** are kept with their raw URL. Seen
+  live: a Story link, a publisher web page, and a Facebook post.
+
+Tested offline against a real page-0 fixture (9 tests). A live parse-only
+check found 12 pages, 116 rows, 116 unique, and every deadline parsed.
+
+**Deliberately not registered in `run_discovery.py` yet.**
+`notify_new_promotions` sends one Telegram message per new promotion, so
+the first pass would send about 116. It gets registered together with the
+capped daily digest, which is step 2.
+
+Two pre-existing test-suite issues were spotted here and fixed in the
+next entry.
+
+## 2026-10-07 — Test suite was writing to real Firestore; fixed
+
+The "date-dependent" `test_global_commercial` failure turned out to be
+something else.
+
+**Cause.** `config.py` loads `.env` at import, and the local `.env` sets
+`STORAGE_BACKEND=firestore`. Six test files override that to `local`, but
+seven don't. They only patch `LOCAL_DATA_DIR`, which Firestore ignores.
+So their `ingest()` calls read and wrote the real Firestore database.
+
+**Effect.** `test_ingest_is_idempotent...` got zero new promotions on its
+first ingest, because an earlier test in the same run had already stored
+the fixture's NESCAFÉ competition there. Audit (read-only): Firestore
+holds exactly 3 promotions and 3 channels, all written at 12:25 today by
+that test run (the NESCAFÉ fixture plus Global WIN fixtures 13666 and
+13771). Nothing older was found. Production is unaffected: Cloud Run and
+the Loquax workflow use `STORAGE_BACKEND=gcs`, not Firestore.
+
+**Fix.**
+- `tests/conftest.py`: an autouse fixture forces
+  `STORAGE_BACKEND=local` with a per-test temp `LOCAL_DATA_DIR`, whatever
+  `.env` says.
+- `pyproject.toml`: a pytest-only config (`pythonpath = ["src"]`) so
+  `pytest` works without `PYTHONPATH=src`. The app itself still runs via
+  `PYTHONPATH`, as in the Dockerfiles.
+
+Full suite: 274 passed, 1 skipped, in roughly half the previous time,
+because the tests no longer make network calls to Firestore. The 3 stray
+Firestore records were left in place pending the user's OK to delete.
