@@ -996,6 +996,26 @@ specifically. Full suite: 238 passed, 1 skipped. Login itself is not yet
 verified against a real account — that's the user's own next action,
 watched, once the two new secrets exist.
 
+## Update — clearing stale FAILED records, and a Global Player login problem
+
+A stale `FAILED` entry record blocks its channel from ever being retried,
+and the storage layer had no way to delete one (it was being hand-edited in
+production). `Repository.delete()` now exists on all three backends, and
+`python -m radiocomp.reset_failed_entry` (`--list`, record ids, or
+`--promotion <id>`) is a deliberate operator tool for clearing them — it
+only ever deletes `FAILED` records, and refuses submit-stage failures by
+default, since those may have happened *after* the real submit click and
+resetting one could lead to a duplicate entry. Full suite: 265 passed,
+1 skipped.
+
+Using that tool's `--list` against production turned up a more important
+problem: **Global Player is rejecting the stored login credentials**
+("Invalid email address or password") — every sign-in attempt since
+2026-10-01 has failed, after working fine on 09-28 to 09-30. The cause
+isn't established yet. The entry-execution schedule is **paused** until
+it is, so no further real login attempts are made against the account;
+see docs/build-log.md, 2026-10-07, for the timeline and candidate causes.
+
 ## Next steps (not built yet)
 
 Nothing from the original spec's core phases remains unbuilt. Open items

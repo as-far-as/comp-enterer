@@ -2422,3 +2422,71 @@ the channel stayed eligible for retry — a real, currently-missing
 capability worth a proper fix later (a `delete()` method, or a small
 "retry this specific failed record" tool) rather than hand-editing
 production JSON again next time.
+
+## 2026-10-07 — `Repository.delete()` + a safe tool for clearing stale FAILED records
+
+Built the fix flagged at the end of the 2026-10-06 entry: a stale `FAILED`
+`EntryRecord` blocks its channel from ever being retried
+(`eligibility.find_draftable_channels()` treats *any* existing record as
+"already attempted"), and the storage layer had no `delete()`, so the only
+way to clear one was hand-editing the production JSON blob — done three
+times that day, backed up and diffed each time, but still hand-editing
+production data.
+
+- `Repository.delete(item_id) -> bool` added to the protocol and all three
+  backends (local JSON, GCS JSON, Firestore). Returns `False` for a missing
+  id rather than raising, and — for the two JSON-blob backends — doesn't
+  rewrite the blob at all when there's nothing to remove. Nothing in the
+  normal discovery/entry-execution flow calls it; no deployed image needed
+  rebuilding for this.
+- `reset_failed_entry.py` — a deliberate operator tool (`--list`, record ids,
+  or `--promotion <id>`), not part of any automatic path. **Only `FAILED`
+  records are deletable**: `SUBMITTED` means a real entry went out,
+  `APPROVED`/`DRAFTED` are a human's live decision in flight, and `SKIPPED`
+  is usually a deliberate human "no" (the Telegram Skip tap). It also
+  refuses a **submit-stage** `FAILED` record (one carrying `approved_at` or
+  `fill_plan` — draft-stage failures never have either) unless
+  `--allow-submit-stage` is passed, because that failure may have happened
+  *after* the real submit click (e.g. the post-submit screenshot raising,
+  which the backstop records as `FAILED` even though the form went through)
+  — resetting it would let the channel be drafted and entered a second
+  time. Even then a fresh draft still needs a fresh human Approve before
+  anything submits. Each reset prints a full audit copy of the deleted
+  record.
+- Tests: `tests/test_storage_delete.py` (local backend for real; GCS and
+  Firestore through small in-memory fakes of just the client surface they
+  touch — proves the delete logic, not Google's SDK) and
+  `tests/test_reset_failed_entry.py`, including the end-to-end point of the
+  whole thing: a stale `FAILED` record makes
+  `find_draftable_channels()` return nothing, and resetting it makes the
+  channel draftable again. Full suite: 265 passed, 1 skipped.
+
+**Found while verifying the tool live (`--list` against production,
+read-only) — and more important than the tool itself: Global Player is
+rejecting the stored credentials.** Seven `FAILED` records since
+2026-10-01 06:15 UTC all say `Global Player sign-in did not appear to
+succeed … Visible form text: 'Invalid email address or password. Please try
+again.'` — 7 of 7 attempts since that date, whereas sign-in succeeded
+repeatedly on 09-28 to 09-30 (the failures that week were at the
+click-through step, *after* a successful sign-in). Each newly discovered
+free Global WIN channel triggers one more real, failing login against the
+real account, and a run that finds several eligible channels fires them
+back-to-back (three within 40 seconds on 10-06 06:15; two on 10-06 11:15).
+**Paused `radio-comp-entry-execution-15min` on 2026-10-07 as a protective
+step** (one `gcloud scheduler jobs resume` to undo) rather than let further
+failed logins accumulate against a possibly-flagged account. Cause not yet
+established — candidates, all unconfirmed: the password was changed or
+reset on Global's side around 09-30/10-01; creating the separate Global
+Commercial account (same Gigya vendor, possibly overlapping identity
+store) interacted with it; or Global's own anti-automation detection
+degraded/locked the account after the repeated logins (a lockout can
+surface as this same generic message). Also noted: nothing in the Global
+WIN path stops after the first rejected sign-in — a per-run circuit
+breaker (and ideally a persisted cooldown) is the obvious missing safeguard,
+not yet built.
+
+Overall web-form entry outcomes at this point: 1 `submitted` (the original
+2026-09-08 end-to-end test), 1 `skipped`, 32 `failed` — none of the Global
+WIN / Google Form / Global Commercial automation has yet produced a
+completed draft (failures: 15 click-through, 7 Global Player sign-in, 9
+Gemini/LLM, 1 other).

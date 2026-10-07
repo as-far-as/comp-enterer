@@ -29,6 +29,19 @@ class Repository(Protocol, Generic[ModelT]):
     def upsert(self, item: ModelT) -> None:
         ...
 
+    def delete(self, item_id: str) -> bool:
+        """True if `item_id` existed and was removed, False if there was
+        nothing to remove (never raises for a missing id). Added 2026-10-07
+        after a real gap: a stale FAILED EntryRecord blocks its channel from
+        ever being retried (eligibility.py treats *any* existing record as
+        "already attempted"), and with no delete() at all the only way to
+        clear one was hand-editing the production JSON blob. Nothing in the
+        normal discovery/entry-execution flow calls this — it exists for
+        deliberate operator tools only (see reset_failed_entry.py), which
+        carry their own guard against deleting anything that records a real
+        action having happened."""
+        ...
+
 
 def get_repository(collection_name: str, model_cls: Type[ModelT]) -> Repository[ModelT]:
     from .. import config

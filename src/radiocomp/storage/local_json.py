@@ -57,3 +57,11 @@ class LocalJsonRepository:
 
     def upsert(self, item: ModelT) -> None:
         self.add(item)  # add() already overwrites by id
+
+    def delete(self, item_id: str) -> bool:
+        data = self._read_all()
+        if item_id not in data:
+            return False
+        del data[item_id]
+        self._write_all(data)
+        return True

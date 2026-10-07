@@ -59,3 +59,10 @@ class FirestoreRepository:
 
     def upsert(self, item: ModelT) -> None:
         self.add(item)
+
+    def delete(self, item_id: str) -> bool:
+        doc_ref = self._collection.document(item_id)
+        if not doc_ref.get().exists:  # Firestore's own delete() is silent on a missing doc
+            return False
+        doc_ref.delete()
+        return True
